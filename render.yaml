@@ -1,0 +1,31 @@
+# Blueprint do Render: New > Blueprint > aponte para o repositorio.
+# Segredos (sync: false) sao preenchidos no painel do Render, nunca aqui.
+services:
+  - type: web
+    name: pipacombate
+    runtime: node
+    plan: starter            # o free "dorme" sem acesso: evite para jogo com dinheiro
+    region: ohio             # mesma regiao do banco no Neon (us-east-2) = menor latencia
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: TRUST_PROXY
+        value: "1"           # Render fica atras de 1 proxy: IP real no rate limit
+      - key: DATABASE_URL
+        sync: false          # string do Neon (com ?sslmode=require)
+      - key: SESSION_SECRET
+        generateValue: true  # o Render gera um segredo forte
+      - key: PAYMENTS_PROVIDER
+        value: mock
+      - key: PAYMENTS_WEBHOOK_SECRET
+        generateValue: true
+      - key: ADMIN_PHONES
+        sync: false
+      - key: DB_POOL_MAX
+        value: "5"

@@ -1,0 +1,25 @@
+{
+  "name": "pipa-combate-dev",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Pipa Combate — backend e frontend. Pagamento via provider plugavel (mock ate integrar o PSP).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test --import ./scripts/setup-env.js",
+    "migrate": "node scripts/migrate.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.16",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.3.0",
+    "pg": "^8.23.1"
+  }
+}

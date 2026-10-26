@@ -1,0 +1,37 @@
+# Sobe Postgres + app. Uso:  docker compose up -d --build
+# Segredos vem do .env (SESSION_SECRET, POSTGRES_PASSWORD...). Nunca commitar o .env.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pipacombate
+      POSTGRES_USER: pipacombate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipacombate -d pipacombate"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # sem "ports": o banco nao fica exposto fora da rede do compose
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://pipacombate:${POSTGRES_PASSWORD}@db:5432/pipacombate
+      SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET no .env}
+      PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-mock}
+      PAYMENTS_WEBHOOK_SECRET: ${PAYMENTS_WEBHOOK_SECRET:-}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    ports:
+      - "${PORT:-3000}:3000"
+
+volumes:
+  pgdata:
