@@ -50,6 +50,35 @@ o projeto. O `.gitignore` já exclui `.env`, `data/` e `node_modules/`.
 
 No plano gratuito a instância "dorme" sem uso, e o primeiro acesso depois disso demora alguns segundos.
 
+## 3d. Northflank + Neon (gratuito, sempre ligado)
+
+1. **Neon:** crie o projeto na região AWS mais próxima da região escolhida no Northflank
+   (ex.: Northflank US East → Neon us-east-1). Copie a string com pooling e use `?sslmode=verify-full`.
+2. Em northflank.com: crie uma conta e um **Project** (plano Sandbox/gratuito) e conecte o GitHub
+   (Account → Integrations → GitHub, autorizando `Mtz08/PipaCombate`).
+3. **Create new → Service → Combined service** (build + deploy):
+   - Repository: `Mtz08/PipaCombate`, branch `main`.
+   - Build type: **Dockerfile**, path `/Dockerfile`, build context `/`.
+   - Resources: o menor plano gratuito disponível.
+4. **Networking → Ports:** `3000`, protocolo **HTTP**, marque **Publicly expose**.
+5. **Health checks:** HTTP, porta `3000`, path `/healthz` (tipo *readiness* e *liveness*).
+6. **Environment:** crie um **Secret group** (ou variáveis secretas do serviço) com:
+
+   | Variável | Valor |
+   |---|---|
+   | `NODE_ENV` | `production` |
+   | `DATABASE_URL` | string do Neon |
+   | `SESSION_SECRET` | gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
+   | `PAYMENTS_PROVIDER` | `mock` |
+   | `TRUST_PROXY` | `1` |
+   | `ADMIN_PHONES` | seu telefone, só dígitos |
+   | `DB_POOL_MAX` | `5` |
+
+7. **Create service.** O primeiro build leva alguns minutos. A URL pública (`*.code.run`)
+   aparece em Networking. Cada push na `main` gera um novo deploy automaticamente.
+
+**Logs:** aba *Logs* do serviço. **Domínio próprio:** Networking → Domains (HTTPS automático).
+
 ## Banco alternativo: Supabase
 
 1. Em supabase.com: **New project**. Escolha uma região perto do app (Koyeb Washington ou
