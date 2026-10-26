@@ -1,0 +1,54 @@
+# Producao numa VM (Oracle Cloud Always Free): Postgres + app + Caddy (HTTPS automatico).
+# Uso (na VM, dentro de deploy/oracle):  docker compose up -d --build
+# Variaveis no arquivo .env desta pasta (ver .env.example). Nunca commitar o .env.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pipacombate
+      POSTGRES_USER: pipacombate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipacombate -d pipacombate"]
+      interval: 5s
+      retries: 10
+    # sem "ports": o banco so e acessivel pela rede interna do compose
+
+  app:
+    build: ../..
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://pipacombate:${POSTGRES_PASSWORD}@db:5432/pipacombate
+      SESSION_SECRET: ${SESSION_SECRET:?defina SESSION_SECRET}
+      PAYMENTS_PROVIDER: mock
+      PAYMENTS_WEBHOOK_SECRET: ${PAYMENTS_WEBHOOK_SECRET:-}
+      TRUST_PROXY: 1
+      ADMIN_PHONES: ${ADMIN_PHONES:-}
+    # sem "ports": so o Caddy fala com o app
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

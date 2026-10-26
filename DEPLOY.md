@@ -50,6 +50,31 @@ o projeto. O `.gitignore` já exclui `.env`, `data/` e `node_modules/`.
 
 No plano gratuito a instância "dorme" sem uso, e o primeiro acesso depois disso demora alguns segundos.
 
+## 3c. Oracle Cloud Always Free (VM própria, não dorme)
+
+Tudo numa VM: Postgres + app + Caddy (HTTPS automático) + backup diário. Arquivos em `deploy/oracle/`.
+
+1. **Criar a VM:** Oracle Cloud → Compute → Instances → Create.
+   - Image: **Ubuntu 22.04 ou 24.04**. Shape: **VM.Standard.A1.Flex** (ARM, Always Free), 1–2 OCPU e 6–12 GB.
+   - Baixe a chave SSH e anote o **IP público**.
+2. **Liberar portas na nuvem:** VCN → Subnet → Security List → Add Ingress Rules:
+   origem `0.0.0.0/0`, TCP, portas **80** e **443**.
+3. **Domínio:** aponte um registro **A** do seu domínio para o IP. Sem domínio, o setup usa
+   `IP-com-tracos.sslip.io` (ex.: `129-146-10-20.sslip.io`), que já funciona com HTTPS.
+4. **Na VM** (`ssh ubuntu@IP`):
+   ```bash
+   git clone https://github.com/Mtz08/PipaCombate.git
+   cd PipaCombate/deploy/oracle
+   bash setup.sh          # instala Docker, abre firewall, gera segredos, agenda backup e sobe
+   nano .env              # confira DOMAIN e coloque ADMIN_PHONES
+   sudo docker compose up -d
+   ```
+   (Se o repositório for privado, use um token do GitHub no `git clone` ou uma deploy key.)
+5. Acesse `https://SEU_DOMINIO`. O Caddy leva alguns segundos para emitir o certificado.
+
+**Atualizar** depois de um push: `cd ~/PipaCombate && git pull && cd deploy/oracle && sudo docker compose up -d --build`
+**Logs:** `sudo docker compose logs -f app` · **Backups:** `~/backups` (14 dias). Copie para fora da VM de vez em quando.
+
 ## 4. Domínio próprio (opcional)
 
 Render → Settings → **Custom Domains**: adicione o domínio e crie no seu DNS o registro
