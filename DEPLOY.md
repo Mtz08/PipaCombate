@@ -50,6 +50,26 @@ o projeto. O `.gitignore` já exclui `.env`, `data/` e `node_modules/`.
 
 No plano gratuito a instância "dorme" sem uso, e o primeiro acesso depois disso demora alguns segundos.
 
+## Banco alternativo: Supabase
+
+1. Em supabase.com: **New project**. Escolha uma região perto do app (Koyeb Washington ou
+   Render Ohio → **East US (N. Virginia)**) e anote a senha do banco.
+2. **Connect** (botão no topo) → **Session pooler** → copie a URI:
+   `postgresql://postgres.<ref>:<SENHA>@aws-0-us-east-1.pooler.supabase.com:5432/postgres`
+   Não use a conexão direta (no plano gratuito ela é só IPv6).
+3. **Certificado:** Project Settings → Database → **SSL Configuration → Download certificate**.
+   Gere o valor de uma linha para a variável:
+   ```powershell
+   (Get-Content prod-ca-2021.crt -Raw).Replace("`r","").Replace("`n","\n")
+   ```
+4. No host do app (Koyeb/Render), defina:
+   - `DATABASE_URL` = a URI do passo 2 (secret)
+   - `DATABASE_SSL_CA` = o valor do passo 3 (secret)
+   - `DB_POOL_MAX` = `5`
+
+As tabelas são criadas sozinhas no primeiro start. O plano gratuito pausa o projeto após
+cerca de 1 semana sem acesso; para reativar, clique em *Restore* no painel.
+
 ## 3c. Oracle Cloud Always Free (VM própria, não dorme)
 
 Tudo numa VM: Postgres + app + Caddy (HTTPS automático) + backup diário. Arquivos em `deploy/oracle/`.

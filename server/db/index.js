@@ -52,7 +52,12 @@ export const dbKind = () => driver?.kind ?? null;
 async function pgDriver(url) {
   const { default: pg } = await import('pg');
   pg.types.setTypeParser(INT8_OID, Number); // centavos cabem com folga em 2^53
-  const pool = new pg.Pool({ connectionString: url, max: CONFIG.db.poolMax });
+  // CA propria do provedor (ex.: Supabase): conexao verificada contra esse certificado.
+  // O sslmode da URL e removido para nao sobrepor a configuracao abaixo.
+  const ca = CONFIG.db.sslCa;
+  const pool = ca
+    ? new pg.Pool({ connectionString: url.replace(/([?&])sslmode=[^&]*&?/, '$1').replace(/[?&]$/, ''), ssl: { ca, rejectUnauthorized: true }, max: CONFIG.db.poolMax })
+    : new pg.Pool({ connectionString: url, max: CONFIG.db.poolMax });
   const wrap = (c) => ({
     query: async (sql, params) => (await c.query(sql, params)).rows,
     exec: async (sql) => { await c.query(sql); },

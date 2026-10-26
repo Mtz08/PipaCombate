@@ -23,6 +23,9 @@ export const CONFIG = {
     url: env.DATABASE_URL || null,
     pgliteDir: isTest ? 'memory://' : (env.PGLITE_DIR || './data/pglite'),
     poolMax: Number(env.DB_POOL_MAX) || 10,
+    // Certificado (PEM) da CA do provedor, quando nao e uma CA publica (ex.: Supabase).
+    // Em variavel de ambiente de uma linha, use \n no lugar das quebras.
+    sslCa: env.DATABASE_SSL_CA ? env.DATABASE_SSL_CA.replace(/\\n/g, '\n') : null,
     // Aplica migrations ao subir. Em deploy com varias instancias pode-se
     // desligar e rodar `npm run migrate` como etapa do pipeline.
     autoMigrate: env.DB_AUTO_MIGRATE !== 'false',
