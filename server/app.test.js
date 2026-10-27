@@ -2,6 +2,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
+import { CONFIG } from './config.js';
 import * as mock from './payments/mock.js';
 import { db } from './db/index.js';
 import { Users } from './db/repos.js';
@@ -179,4 +180,18 @@ test('saques recentes publicos: so saques PAGOS, com nome abreviado', async () =
   const s = r.body.saques.find((x) => x.nome === 'Ana S.');
   assert.equal(s.valorCents, 10000);
   assert.equal(JSON.stringify(r.body).includes('Paula'), false);
+});
+
+test('senha de demonstracao: sem ela o site pede login (401); com ela abre; webhook fica livre', async () => {
+  CONFIG.demoAccess.password = 'senha-demo-123';
+  try {
+    assert.equal((await fetch(base + '/')).status, 401);
+    const ok = await fetch(base + '/', { headers: { Authorization: 'Basic ' + Buffer.from('equipe:senha-demo-123').toString('base64') } });
+    assert.equal(ok.status, 200);
+    const errada = await fetch(base + '/', { headers: { Authorization: 'Basic ' + Buffer.from('equipe:outra').toString('base64') } });
+    assert.equal(errada.status, 401);
+    const wh = await fetch(base + '/api/webhooks/payments', { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
+    assert.equal((await wh.json()).error.code, 'BAD_SIGNATURE'); // passou do portao: quem barrou foi a assinatura
+    assert.equal((await fetch(base + '/healthz')).status, 200);
+  } finally { CONFIG.demoAccess.password = ''; }
 });

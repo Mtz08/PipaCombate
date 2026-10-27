@@ -22,6 +22,7 @@ import { fairRouter } from './routes/fair.js';
 import { adminRouter } from './routes/admin.js';
 import { indicacaoRouter } from './routes/indicacao.js';
 import { requestLog } from './util/log.js';
+import { demoGate } from './middleware/demoGate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', 'public');
@@ -59,6 +60,7 @@ export function createApp() {
   app.use((_req, res, next) => { res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'); next(); });
 
   // corpo pequeno: so dados de formulario. rawBody guardado para validar webhooks.
+  app.use(demoGate); // so age com DEMO_ACCESS_PASSWORD (ambiente de demonstracao)
   app.use(express.json({ limit: '32kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
   app.use(cookieParser());
   app.use(requestLog);

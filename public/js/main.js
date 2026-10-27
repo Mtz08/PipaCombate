@@ -1708,7 +1708,7 @@ function enterLobby(msg) {
   renderLobby(); refreshLobby();
   if (msg) toastHtml(msg, 'gold');
   Sound.music('menu'); Sound.crowdAmb(0);
-  if (window.PCConfig) window.PCConfig.then(c => { renderFooter(c); showPopup(c && c.popup); }).catch(() => {});
+  if (window.PCConfig) window.PCConfig.then(c => { renderFooter(c); $('#mockBar').hidden = !(c && c.pagamento === 'MOCK'); showPopup(c && c.popup); }).catch(() => {});
 }
 
 /* Ultimos saques pagos (dados reais da API; vazio = secao escondida) */

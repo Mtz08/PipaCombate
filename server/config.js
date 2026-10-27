@@ -98,6 +98,9 @@ export const CONFIG = {
 
   // Versao vigente dos termos de uso; troque ao publicar um texto novo.
   termsVersion: env.TERMS_VERSION || '2026-10-27',
+
+  // Senha de acesso ao ambiente de demonstracao (vazia = site aberto normalmente).
+  demoAccess: { user: env.DEMO_ACCESS_USER || 'equipe', password: env.DEMO_ACCESS_PASSWORD || '' },
 };
 
 // Falha rapido em producao com configuracao insegura, em vez de subir vulneravel.
