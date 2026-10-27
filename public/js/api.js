@@ -63,7 +63,7 @@ function toCfg(lobby) {
   for (const k in lobby.pct) pct[k] = Math.round(lobby.pct[k] * 100);
   return {
     pct, cap: lobby.maxMult, stake_min: lobby.betMinCents, stake_max: lobby.betMaxCents,
-    rtp: lobby.rtpPct, forca: lobby.forca, maps: lobby.maps,
+    rtp: lobby.rtpPct, forca: lobby.forca, maps: lobby.maps, modoTeste: !!lobby.modoTeste,
   };
 }
 
@@ -74,6 +74,7 @@ function toHistory(r) {
     // dados para verificar o sorteio (server_seed so vem depois de revelada)
     nonce: r.nonce, clientSeed: r.clientSeed, serverSeedHash: r.serverSeedHash, serverSeed: r.serverSeed,
     rtpBps: r.rtpBps, maxMultX100: r.maxMultX100, // parametros com que o vento desta rodada foi sorteado
+    teste: !!r.teste,
   };
 }
 const toTop = (t) => ({ username: t.name, map: t.map, stake: t.betCents, win: t.prizeCents, at: t.at });

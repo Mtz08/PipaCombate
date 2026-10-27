@@ -105,7 +105,7 @@ export async function reverseCharge(t, chargeId) {
 
 /** Hook: rodada encerrada do indicado (dentro da transacao da rodada). */
 export async function onRoundClosed(t, user, { roundId, betCents, prizeCents }) {
-  if (!user.referredBy) return;
+  if (!user.referredBy || user.testAlwaysWin) return; // rodada de teste nao gera comissao
   const cfg = await getSetting('afiliados', t);
   if (cfg.ativo && cfg.modelo === 'cpa') return maybePayCpa(t, user, cfg);
   if (!cfg.ativo || cfg.modelo !== 'revshare') return;

@@ -536,3 +536,4 @@ button.trust{cursor:pointer}
 .how-facts{list-style:none;display:flex;flex-direction:column;gap:6px;margin:12px 0 10px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line);font-size:12.5px;font-weight:800;color:var(--mut);line-height:1.4}
 .how-facts b{color:#dfe5f1}
 .how-facts #trustRtp{color:var(--gold)}
+.teste-bar{flex:none;background:#7c3aed;color:#fff;font-weight:900;font-size:12px;text-align:center;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.2)}

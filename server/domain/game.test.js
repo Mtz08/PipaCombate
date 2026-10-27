@@ -105,3 +105,21 @@ test('ranking: so saques com lucro, maior lucro primeiro e nome abreviado', asyn
   assert.equal(publicName('Caio'), 'Caio');
   assert.equal(publicName('  '), 'Jogador');
 });
+
+test('modo teste (so desenvolvimento): vento nunca vira e fica fora do ranking; em producao e ignorado', async () => {
+  const u = await makeUser('1188880077', 1000000);
+  await db.query('UPDATE users SET test_always_win = true WHERE id = $1', [u.id]);
+  const { round } = await start(u.id, { betCents: 1000 });
+  for (let i = 0; i < 60; i++) assert.equal((await cut(u.id, round.id, { kind: 'chefe' })).wind, false); // passa do teto de 50x sem virar
+  const c = await cashout(u.id, round.id);
+  assert.equal(c.prizeCents, 1000 * CONFIG.game.maxMultX100 / 100);
+  assert.equal((await Rounds.get(db, round.id)).teste, true);
+  assert.ok(!(await lobby()).top.some((t) => t.prizeCents === c.prizeCents && t.name === 'Teste'));
+
+  CONFIG.isProd = true; // em producao a flag nao vale
+  try {
+    const { round: r2 } = await start(u.id, { betCents: 1000 });
+    assert.equal((await Rounds.get(db, r2.id)).teste, false);
+    await lose(u.id, r2.id, { reason: 'cut' });
+  } finally { CONFIG.isProd = false; }
+});

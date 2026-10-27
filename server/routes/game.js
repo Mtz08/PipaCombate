@@ -8,7 +8,7 @@ export const gameRouter = Router();
 gameRouter.use(requireAuth); // todo o jogo exige login
 gameRouter.use(gameLimiter); // por usuario: bot nao martela o banco
 
-gameRouter.get('/lobby', wrap(async (_req, res) => res.json(await Game.lobby())));
+gameRouter.get('/lobby', wrap(async (req, res) => res.json(await Game.lobby(req.user))));
 
 // round em andamento (retomar apos recarregar a pagina)
 gameRouter.get('/active', wrap(async (req, res) => res.json(await Game.active(req.user.id))));

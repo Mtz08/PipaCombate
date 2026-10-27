@@ -1767,6 +1767,7 @@ async function refreshLobby() {
     acct = { balance: j.balance, cfg: j.cfg, history: j.history, top: j.top, canRefill: j.canRefill };
     if (j.cfg.rtp) { $("#howRtp").textContent = String(j.cfg.rtp).replace(".", ",") + "%"; $('#trustRtp').textContent = String(j.cfg.rtp).replace('.', ',') + '%'; }
     renderPagos();
+    $('#testeBar').hidden = !j.cfg.modoTeste;
     Auth.set(Auth.token, j.user);
     await retryPending();
     renderLobby();
@@ -1940,8 +1941,8 @@ function showRoundCheck(h) {
       <li><span>Hash da server seed</span><b class="mono">${short(h.serverSeedHash)}</b></li>
       <li><span>Server seed</span><b class="mono">${h.serverSeed ? short(h.serverSeed) : 'ainda secreta'}</b></li>
     </ul>
-    <p id="fairOut">${h.serverSeed ? 'Toque em verificar para recalcular o vento aqui no seu aparelho.' : 'A server seed desta rodada ainda está em uso. Revele (troca de seed) para poder verificar.'}</p>
-    <div class="row">${h.serverSeed ? '<button class="btn btn-play" id="fairGo"><span>VERIFICAR</span></button>' : '<button class="btn btn-2" id="fairPanel">REVELAR SEED</button>'}</div>`);
+    <p id="fairOut">${h.teste ? '🧪 Rodada do modo teste: o vento foi desligado, não há sorteio para verificar.' : h.serverSeed ? 'Toque em verificar para recalcular o vento aqui no seu aparelho.' : 'A server seed desta rodada ainda está em uso. Revele (troca de seed) para poder verificar.'}</p>
+    <div class="row">${h.teste ? '' : h.serverSeed ? '<button class="btn btn-play" id="fairGo"><span>VERIFICAR</span></button>' : '<button class="btn btn-2" id="fairPanel">REVELAR SEED</button>'}</div>`);
   if ($('#fairPanel')) $('#fairPanel').onclick = () => { closeModal(); showFairPanel(); };
   if ($('#fairGo')) $('#fairGo').onclick = async () => {
     const out = $('#fairOut');

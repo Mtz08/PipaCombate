@@ -28,13 +28,18 @@ export const KINDS = Object.keys(CONFIG.game.pctX100);
 /** Premio em centavos, arredondado para baixo. */
 export const prizeFor = (betCents, multX100) => Math.floor((betCents * multX100) / 100);
 
-export async function lobby() {
+/** Modo teste: SO fora de producao. Em producao a flag e ignorada (sorteio sempre valendo). */
+export const isTestMode = (user) => !CONFIG.isProd && !!user?.testAlwaysWin;
+
+export async function lobby(user = null) {
   const g = await getSetting('jogo');
+  const teste = isTestMode(user);
   return {
+    modoTeste: teste, // o front mostra a faixa "MODO TESTE"
     maps: MAPS,
     rtpPct: g.rtpBps / 100,
     maxMult: g.maxMultX100 / 100,
-    forca: g.forca,
+    forca: teste ? 0.5 : g.forca, // modo teste: rivais fracos
     pct: Object.fromEntries(KINDS.map((k) => [k, g.pctX100[k] / 100])),
     betMinCents: g.betMinCents,
     betMaxCents: g.betMaxCents,
@@ -67,9 +72,11 @@ export async function start(userId, { betCents, map }) {
       if (await Rounds.openByUser(t, userId)) throw roundOpenError();
       const seed = await activeSeed(t, userId);
       const nonce = await FairSeeds.takeNonce(t, seed.id);
-      const ceilingX100 = windPoint(seed.serverSeed, seed.clientSeed, nonce, g.rtpBps, g.maxMultX100);
+      // modo teste (so desenvolvimento): teto acima do ganho maximo = o vento nunca vira
+      const teste = isTestMode(user);
+      const ceilingX100 = teste ? g.maxMultX100 + 1 : windPoint(seed.serverSeed, seed.clientSeed, nonce, g.rtpBps, g.maxMultX100);
       const round = await Rounds.create(t, {
-        userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100, rtpBps: g.rtpBps, maxMultX100: g.maxMultX100,
+        userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100, rtpBps: g.rtpBps, maxMultX100: g.maxMultX100, teste,
       });
       const balanceAfter = await applyDebit(t, user, bet, 'bet', { roundId: round.id, map: chosenMap });
       // cada aposta desconta do rollover pendente do deposito
@@ -139,6 +146,7 @@ export async function history(userId) {
       ...viewRound(r), nonce: r.nonce, clientSeed: r.clientSeed,
       serverSeedHash: r.serverSeedHash, serverSeed: r.serverSeed, createdAt: r.createdAt,
       rtpBps: r.rtpBps, maxMultX100: r.maxMultX100, // parametros do sorteio desta rodada
+      teste: r.teste, // rodada do modo teste: sem sorteio para verificar
     })),
   };
 }
