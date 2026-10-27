@@ -12,24 +12,30 @@ import { log } from '../util/log.js';
 
 const maskPhone = (p) => (p ? `${p.slice(0, 4)}*****${p.slice(-2)}` : '');
 
+// O painel mostra SO dados reais: fora as contas de demonstracao (npm run demo),
+// as rodadas do modo teste (e as apostas/premios delas) e o saldo das contas em
+// modo teste (inflado pelos ganhos de teste).
 export async function stats() {
   const [money] = await db.query(`
     SELECT
-      COALESCE(SUM(delta_cents) FILTER (WHERE type = 'deposit'), 0)            AS deposits,
-      COALESCE(-SUM(delta_cents) FILTER (WHERE type = 'withdraw'), 0)          AS withdrawals,
-      COALESCE(SUM(delta_cents) FILTER (WHERE type = 'withdraw_reversal'), 0)  AS reversals,
-      COALESCE(-SUM(delta_cents) FILTER (WHERE type = 'bet'), 0)               AS bets,
-      COALESCE(SUM(delta_cents) FILTER (WHERE type = 'prize'), 0)              AS prizes,
-      COALESCE(SUM(delta_cents) FILTER (WHERE type = 'adjust'), 0)             AS adjustments
-    FROM ledger`);
-  const [u] = await db.query(`SELECT COUNT(*)::int AS users, COALESCE(SUM(balance_cents), 0) AS balances FROM users`);
+      COALESCE(SUM(l.delta_cents) FILTER (WHERE l.type = 'deposit'), 0)            AS deposits,
+      COALESCE(-SUM(l.delta_cents) FILTER (WHERE l.type = 'withdraw'), 0)          AS withdrawals,
+      COALESCE(SUM(l.delta_cents) FILTER (WHERE l.type = 'withdraw_reversal'), 0)  AS reversals,
+      COALESCE(-SUM(l.delta_cents) FILTER (WHERE l.type = 'bet'), 0)               AS bets,
+      COALESCE(SUM(l.delta_cents) FILTER (WHERE l.type = 'prize'), 0)              AS prizes,
+      COALESCE(SUM(l.delta_cents) FILTER (WHERE l.type = 'adjust'), 0)             AS adjustments
+    FROM ledger l JOIN users u ON u.id = l.user_id
+   WHERE NOT u.demo
+     AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.teste AND r.id::text = l.meta->>'roundId')`);
+  const [u] = await db.query(`SELECT COUNT(*)::int AS users, COALESCE(SUM(balance_cents) FILTER (WHERE NOT test_always_win), 0) AS balances FROM users WHERE NOT demo`);
   const [r] = await db.query(`
-    SELECT COUNT(*) FILTER (WHERE state = 'open')::int AS open,
-           COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::int AS last24h,
-           COUNT(*) FILTER (WHERE end_reason = 'wind')::int AS wind,
-           COUNT(*) FILTER (WHERE end_reason = 'cut')::int AS cut,
-           COUNT(*) FILTER (WHERE end_reason = 'cashed')::int AS cashed
-      FROM rounds`);
+    SELECT COUNT(*) FILTER (WHERE r.state = 'open')::int AS open,
+           COUNT(*) FILTER (WHERE r.created_at > now() - interval '24 hours')::int AS last24h,
+           COUNT(*) FILTER (WHERE r.end_reason = 'wind')::int AS wind,
+           COUNT(*) FILTER (WHERE r.end_reason = 'cut')::int AS cut,
+           COUNT(*) FILTER (WHERE r.end_reason = 'cashed')::int AS cashed
+      FROM rounds r JOIN users u ON u.id = r.user_id
+     WHERE NOT u.demo AND NOT r.teste`);
   const ggr = money.bets - money.prizes; // receita bruta de jogo da casa
   return {
     money: { ...money, ggr, rtpRealPct: money.bets ? Math.round((money.prizes / money.bets) * 10000) / 100 : null },
@@ -40,10 +46,10 @@ export async function stats() {
 export async function searchUsers(term) {
   const q = String(term ?? '').trim().slice(0, 40);
   const rows = await db.query(
-    `SELECT * FROM users WHERE ($1 = '' OR phone LIKE $2 OR name ILIKE $3) ORDER BY created_at DESC LIMIT 30`,
+    `SELECT * FROM users WHERE NOT demo AND ($1 = '' OR phone LIKE $2 OR name ILIKE $3) ORDER BY created_at DESC LIMIT 30`,
     [q, `%${q.replace(/\D/g, '') || '§'}%`, `%${q}%`],
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, phone: maskPhone(r.phone), balanceCents: r.balance_cents, role: r.role, createdAt: r.created_at }));
+  return rows.map((r) => ({ id: r.id, name: r.name, phone: maskPhone(r.phone), balanceCents: r.balance_cents, role: r.role, createdAt: r.created_at, modoTeste: r.test_always_win }));
 }
 
 export async function userDetail(id) {
@@ -71,7 +77,7 @@ export async function suspects() {
             COALESCE(SUM(r.prize_cents - r.bet_cents), 0)::bigint AS lucro,
             AVG(r.cuts)::float AS cortes_medios
        FROM rounds r JOIN users u ON u.id = r.user_id
-      WHERE r.state <> 'open' AND r.created_at > now() - interval '7 days'
+      WHERE r.state <> 'open' AND NOT r.teste AND NOT u.demo AND r.created_at > now() - interval '7 days'
       GROUP BY u.id
      HAVING COUNT(*) >= 20 AND COUNT(*) FILTER (WHERE r.end_reason = 'cut') = 0
       ORDER BY lucro DESC LIMIT 50`,

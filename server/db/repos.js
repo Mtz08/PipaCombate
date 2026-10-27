@@ -267,7 +267,7 @@ export const Withdrawals = {
     const rows = await q.query(
       `SELECT w.*, u.name AS user_name, u.phone AS user_phone, u.balance_cents AS user_balance, u.created_at AS user_since
          FROM withdrawals w JOIN users u ON u.id = w.user_id
-        WHERE w.status = 'review' ORDER BY w.created_at LIMIT $1`, [limit],
+        WHERE w.status = 'review' AND NOT u.demo ORDER BY w.created_at LIMIT $1`, [limit],
     );
     return rows.map((r) => ({ ...mapWithdrawal(r), userName: r.user_name, userPhone: r.user_phone, userBalanceCents: Number(r.user_balance), userSince: ms(r.user_since) }));
   },

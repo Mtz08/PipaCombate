@@ -50,7 +50,7 @@ async function boot() {
   $('#app').innerHTML = `
     <header><div class="brand small"><span class="logo"></span><b>Admin</b></div><a class="link" href="/">voltar ao jogo</a></header>
     <section id="tfa" class="card warn" hidden></section>
-    <section class="card"><h2>Numeros</h2><div id="stats" class="grid"></div>
+    <section class="card"><h2>Numeros</h2><p class="hint">Só dados reais: sem as contas de demonstração e sem as rodadas do modo teste.</p><div id="stats" class="grid"></div>
       <button id="btnExpire" class="link">encerrar rounds abandonados agora</button></section>
     <section class="card"><h2>Saques para aprovar <small id="wqN"></small></h2>
       <p class="hint">O valor ja saiu do saldo do jogador. Aprovar envia o PIX; recusar devolve o valor ao saldo.</p>
@@ -262,7 +262,7 @@ async function stats() {
 
 async function search() {
   const { users } = await api(`users?q=${encodeURIComponent($('#q').value)}`);
-  $('#users').innerHTML = users.map((u) => `<li data-id="${esc(u.id)}" class="click"><span>${esc(u.name)} <small>${esc(u.phone)}${u.role === 'admin' ? ' · admin' : ''}</small></span><span>${brl(u.balanceCents)}</span></li>`).join('') || '<li class="hint">Ninguem encontrado.</li>';
+  $('#users').innerHTML = users.map((u) => `<li data-id="${esc(u.id)}" class="click"><span>${esc(u.name)} <small>${esc(u.phone)}${u.role === 'admin' ? ' · admin' : ''}${u.modoTeste ? ' · 🧪 modo teste' : ''}</small></span><span>${brl(u.balanceCents)}</span></li>`).join('') || '<li class="hint">Ninguem encontrado.</li>';
   $('#users').onclick = (e) => { const li = e.target.closest('li[data-id]'); if (li) detail(li.dataset.id); };
 }
 

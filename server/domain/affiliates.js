@@ -183,8 +183,8 @@ export async function adminStats() {
             COALESCE(-SUM(delta_cents) FILTER (WHERE type = 'withdraw'), 0) AS sacado,
             COALESCE(SUM(delta_cents) FILTER (WHERE type = 'withdraw_reversal'), 0) AS estornado,
             COUNT(DISTINCT affiliate_id)::int AS afiliados
-       FROM affiliate_ledger`,
+       FROM affiliate_ledger a JOIN users u ON u.id = a.affiliate_id WHERE NOT u.demo`,
   );
-  const [u] = await db.query('SELECT COUNT(*)::int AS indicados FROM users WHERE referred_by IS NOT NULL');
+  const [u] = await db.query('SELECT COUNT(*)::int AS indicados FROM users WHERE referred_by IS NOT NULL AND NOT demo');
   return { comissoesCents: Number(s.comissoes), sacadoCents: Number(s.sacado) - Number(s.estornado), afiliados: s.afiliados, indicados: u.indicados };
 }

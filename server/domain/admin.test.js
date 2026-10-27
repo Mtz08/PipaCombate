@@ -128,3 +128,22 @@ test('cabecalhos: CSP sem style inline, Permissions-Policy e Referrer-Policy', a
   assert.match(r.headers.get('permissions-policy'), /camera=\(\)/);
   assert.equal(r.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
 });
+
+test('painel: contas de demonstracao e rodadas do modo teste ficam fora dos numeros', async () => {
+  const { stats, searchUsers } = await import('./admin.js');
+  const antes = await stats();
+  const demo = await makeUser('10000009999', 50000);
+  await db.query('UPDATE users SET demo = true WHERE id = $1', [demo.id]);
+  const dono = await makeUser('11900000030', 50000);
+  await db.query('UPDATE users SET test_always_win = true WHERE id = $1', [dono.id]);
+  const { round } = await start(dono.id, { betCents: 1000 }); // rodada do modo teste
+  await lose(dono.id, round.id, { reason: 'cut' });
+
+  const depois = await stats();
+  assert.equal(depois.users, antes.users + 1);                         // so o dono (real) conta
+  assert.equal(Number(depois.money.bets), Number(antes.money.bets));     // aposta de teste nao entra
+  assert.equal(Number(depois.money.deposits), Number(antes.money.deposits) + 50000); // deposito real do dono
+  assert.equal(depois.rounds.cut, antes.rounds.cut);
+  assert.equal(Number(depois.balancesCents), Number(antes.balancesCents)); // saldo de conta em modo teste fora
+  assert.ok(!(await searchUsers('10000009999')).length);
+});

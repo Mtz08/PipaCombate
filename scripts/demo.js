@@ -41,8 +41,8 @@ try {
       const ids = [];
       for (let i = 0; i < NOMES.length; i++) {
         const [u] = await t.query(
-          `INSERT INTO users (name, phone, password_hash, referral_code, terms_accepted_at, terms_version)
-           VALUES ($1, $2, 'demo-sem-login', $3, now(), 'demo') RETURNING id`,
+          `INSERT INTO users (name, phone, password_hash, referral_code, terms_accepted_at, terms_version, demo)
+           VALUES ($1, $2, 'demo-sem-login', $3, now(), 'demo', true) RETURNING id`,
           [NOMES[i], PREFIXO + String(i).padStart(4, '0'), 'DEMO' + randomUUID().slice(0, 4).toUpperCase()],
         );
         ids.push(u.id);
@@ -77,7 +77,7 @@ try {
 
 async function limpar() {
   return tx(async (t) => {
-    const ids = (await t.query(`SELECT id FROM users WHERE phone LIKE '${PREFIXO}%'`)).map((r) => r.id);
+    const ids = (await t.query('SELECT id FROM users WHERE demo')).map((r) => r.id);
     if (!ids.length) return 0;
     for (const tabela of ['rounds', 'withdrawals', 'ledger', 'charges', 'fair_seeds', 'affiliate_ledger', 'audit_log']) {
       await t.query(`DELETE FROM ${tabela} WHERE user_id = ANY($1)`.replace('user_id', tabela === 'affiliate_ledger' ? 'affiliate_id' : 'user_id'), [ids]);
