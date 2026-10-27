@@ -537,3 +537,6 @@ button.trust{cursor:pointer}
 .how-facts b{color:#dfe5f1}
 .how-facts #trustRtp{color:var(--gold)}
 .teste-bar{flex:none;background:#7c3aed;color:#fff;font-weight:900;font-size:12px;text-align:center;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.2)}
+.admin-link{display:block;text-align:center;padding:10px 12px;border-radius:12px;background:rgba(242,193,78,.12);border:1px solid rgba(242,193,78,.45);color:var(--gold);font-weight:900;font-size:13px;text-decoration:none}
+.admin-link.hidden{display:none}
+.sheet-b>*{flex-shrink:0} /* folha rola em vez de espremer botoes */

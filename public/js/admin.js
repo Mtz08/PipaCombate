@@ -66,7 +66,7 @@ async function boot() {
     <section class="card"><h2>Pixels de anúncio</h2>
       <p class="hint">Só carregam para quem aceitar os cookies de marketing. Eventos: cadastro (CompleteRegistration), início de depósito (InitiateCheckout) e depósito confirmado (Purchase / CompletePayment).</p>
       <form id="fMkt" class="aff-form"></form></section>
-    <section class="card"><h2>Indique e ganhe</h2><div id="affStats" class="grid"></div>
+    <section id="afiliados" class="card"><h2>Indique e ganhe</h2><div id="affStats" class="grid"></div>
       <form id="affForm" class="aff-form">
         <label class="check"><input type="checkbox" name="ativo"> Programa ativo</label>
         <label>Modelo <select name="modelo">
@@ -91,6 +91,7 @@ async function boot() {
   show2faSetup(); stats(); search(); audit(); withdrawals(); affiliates(); suspects();
   settingsForm('jogo', '#fJogo', JOGO); settingsForm('limites', '#fLim', LIMITES); publicoForm();
   settingsForm('marketing', '#fMkt', MARKETING); settingsForm('bonus', '#fBonus', BONUS);
+  if (location.hash) setTimeout(() => document.querySelector(location.hash)?.scrollIntoView({ behavior: 'smooth' }), 400);
 }
 
 /* ---------- formularios de configuracao (settings) ----------

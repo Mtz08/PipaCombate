@@ -1765,6 +1765,8 @@ async function refreshLobby() {
   try {
     const j = await Api.lobby();
     acct = { balance: j.balance, cfg: j.cfg, history: j.history, top: j.top, canRefill: j.canRefill };
+    // atalhos para o painel: so aparecem para admin (o servidor e quem barra o acesso)
+    $$('.js-admin').forEach(el => el.classList.toggle('hidden', !(j.user && j.user.admin)));
     if (j.cfg.rtp) { $("#howRtp").textContent = String(j.cfg.rtp).replace(".", ",") + "%"; $('#trustRtp').textContent = String(j.cfg.rtp).replace('.', ',') + '%'; }
     renderPagos();
     $('#testeBar').hidden = !j.cfg.modoTeste;
