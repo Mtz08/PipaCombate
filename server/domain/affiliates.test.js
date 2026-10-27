@@ -23,8 +23,8 @@ async function cadeia() {
   const a = await user(), b = await user(a.id), c = await user(b.id), d = await user(c.id);
   return { a, b, c, d };
 }
-const config = (v) => setSetting('afiliados', { ...SCHEMAS.afiliados.padrao, ...v }, null);
-after(() => config({}));
+const config = (v) => setSetting('afiliados', { ...SCHEMAS.afiliados.padrao(), ...v }, null);
+after(() => setSetting('afiliados', null, null));
 
 test('modelo deposito: % de cada deposito em 3 niveis', async () => {
   await config({ modelo: 'deposito', niveisPct: [10, 5, 3] });

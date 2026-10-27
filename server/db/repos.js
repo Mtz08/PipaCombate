@@ -13,6 +13,9 @@ export function mapUser(r) {
     sessionVersion: r.session_version, createdAt: ms(r.created_at), role: r.role,
     referredBy: r.referred_by ?? null, termsAcceptedAt: ms(r.terms_accepted_at), termsVersion: r.terms_version ?? null,
     cpfHash: r.cpf_hash ?? null,
+    depLimitCents: r.dep_limit_cents == null ? null : Number(r.dep_limit_cents), depLimitPeriod: r.dep_limit_period ?? null,
+    depLimitNextCents: r.dep_limit_next_cents == null ? null : Number(r.dep_limit_next_cents), depLimitNextPeriod: r.dep_limit_next_period ?? null,
+    depLimitNextAt: ms(r.dep_limit_next_at), depLimitNextSet: !!r.dep_limit_next_set, selfExcludedUntil: ms(r.self_excluded_until),
   };
 }
 
@@ -85,6 +88,7 @@ const mapRound = (r) => r && {
   seedId: r.seed_id, nonce: r.nonce, forfeit: r.forfeit,
   ceilingX100: r.ceiling_x100, multX100: r.mult_x100, counts: r.counts || {},
   lastCutAt: ms(r.last_cut_at), endReason: r.end_reason,
+  rtpBps: r.rtp_bps ?? 9600, maxMultX100: r.max_mult_x100 ?? 5000,
 };
 
 export const Rounds = {
@@ -96,11 +100,11 @@ export const Rounds = {
       "SELECT * FROM rounds WHERE user_id = $1 AND state = 'open'", [userId],
     ))[0]) || null;
   },
-  async create(q, { userId, betCents, map, seedId, nonce, ceilingX100 }) {
+  async create(q, { userId, betCents, map, seedId, nonce, ceilingX100, rtpBps = 9600, maxMultX100 = 5000 }) {
     return mapRound((await q.query(
-      `INSERT INTO rounds (user_id, bet_cents, map, seed_id, nonce, ceiling_x100)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [userId, betCents, map, seedId, nonce, ceilingX100],
+      `INSERT INTO rounds (user_id, bet_cents, map, seed_id, nonce, ceiling_x100, rtp_bps, max_mult_x100)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [userId, betCents, map, seedId, nonce, ceilingX100, rtpBps, maxMultX100],
     ))[0]);
   },
   /** Registra um corte: soma ao multiplicador e a contagem do tipo. */

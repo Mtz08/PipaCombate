@@ -73,6 +73,7 @@ function toHistory(r) {
     status: r.state === 'cashed' ? 'won' : 'lost', reason: r.endReason, wind: r.wind, at: r.createdAt,
     // dados para verificar o sorteio (server_seed so vem depois de revelada)
     nonce: r.nonce, clientSeed: r.clientSeed, serverSeedHash: r.serverSeedHash, serverSeed: r.serverSeed,
+    rtpBps: r.rtpBps, maxMultX100: r.maxMultX100, // parametros com que o vento desta rodada foi sorteado
   };
 }
 const toTop = (t) => ({ username: t.name, map: t.map, stake: t.betCents, win: t.prizeCents, at: t.at });
@@ -137,7 +138,7 @@ export const Api = {
   },
   async depositInfo() {
     const j = await call('wallet/deposit-info');
-    return { depositoMinimoCents: j.minCents, depositoMaximoCents: j.maxCents, provider: j.provider };
+    return { depositoMinimoCents: j.minCents, depositoMaximoCents: j.maxCents, provider: j.provider, chips: j.chipsCents, rotulos: j.rotulos || {}, cores: j.cores || {} };
   },
   async deposit(amountCents) {
     const j = await post('wallet/deposit', { amountCents });
@@ -153,6 +154,11 @@ export const Api = {
     return { saqueMinimoCents: j.minCents, saqueMaximoCents: j.maxCents };
   },
   withdraw: (amountCents, pixKey, cpf) => post('wallet/withdraw', { amountCents, pixKey, cpf }),
+
+  /* ---- jogo responsável ---- */
+  responsavel: () => call('wallet/responsavel'),
+  setDepositLimit: (cents, period) => post('wallet/responsavel/limite', { cents, period }),
+  selfExclude: (dias) => post('wallet/responsavel/pausa', { dias }),
 
   /* ---- indique e ganhe (afiliados entram na Fase 5) ---- */
   async indicacao() {

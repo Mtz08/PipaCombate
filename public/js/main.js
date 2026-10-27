@@ -1439,8 +1439,12 @@ function renderWallet() {
     walletDepInfo = info;
     const mn = info.depositoMinimoCents || 0, mx = info.depositoMaximoCents || 0;
     $('#wDepMin').textContent = `mín. ${money(mn)} · máx. ${money(mx)}`;
-    const chips = [2000, 5000, 10000, 20000, 50000].filter(v => (!mn || v >= mn) && (!mx || v <= mx));
-    $('#wDepChips').innerHTML = chips.map(v => `<button class="chip big" data-v="${v}">🪙 ${money(v)}</button>`).join('');
+    // botões de depósito rápido configurados no painel (valor, rótulo e cor)
+    const chips = (info.chips || [2000, 5000, 10000, 20000, 50000]).filter(v => (!mn || v >= mn) && (!mx || v <= mx));
+    $('#wDepChips').innerHTML = chips.map(v => {
+      const cor = /^#[0-9a-f]{6}$/i.test(info.cores[v] || '') ? ` style="--chip:${info.cores[v]}"` : '';
+      return `<button class="chip big${cor ? ' tinted' : ''}" data-v="${v}"${cor}>🪙 ${money(v)}${info.rotulos[v] ? `<small>${esc(info.rotulos[v])}</small>` : ''}</button>`;
+    }).join('');
     $$('#wDepChips .chip').forEach(b => b.onclick = () => { Sound.pop(); $('#wDepVal').value = money(+b.dataset.v); });
   }).catch(() => {});
   Api.withdrawInfo().then(info => {
@@ -1868,7 +1872,7 @@ function showRoundCheck(h) {
   if ($('#fairGo')) $('#fairGo').onclick = async () => {
     const out = $('#fairOut');
     try {
-      const c = acct.cfg, r = await windPoint({ serverSeed: h.serverSeed, clientSeed: h.clientSeed, nonce: h.nonce, rtpBps: Math.round(c.rtp * 100), maxMultX100: Math.round(c.cap * 100) });
+      const r = await windPoint({ serverSeed: h.serverSeed, clientSeed: h.clientSeed, nonce: h.nonce, rtpBps: h.rtpBps, maxMultX100: h.maxMultX100 });
       const hashOk = r.serverSeedHash === h.serverSeedHash, windOk = Math.abs(r.windX100 / 100 - h.wind) < 1e-9;
       out.innerHTML = hashOk && windOk
         ? `✅ Confere: o hash bate e o vento recalculado deu <b>${fmtX(r.windX100 / 100)}</b>.`
@@ -1909,7 +1913,35 @@ function renderHow() {
   g.innerHTML = list.map(r => `<div class="rival"><canvas></canvas><div><b>${r.nome}</b><small>${r.desc}</small></div></div>`).join('');
   $$('#rivals canvas').forEach((cv, i) => Art.kitePreview(cv, list[i].look, list[i].shape, false));
 }
+/* ---------- jogo responsável (limite de depósito e pausa) ---------- */
+const PER = { dia: 'por dia', semana: 'por semana', mes: 'por mês' };
+async function renderResponsavel() {
+  const box = $('#rgBox');
+  let s;
+  try { s = await Api.responsavel(); } catch (e) { box.innerHTML = '<p class="note">Não deu pra carregar agora.</p>'; return; }
+  const data = ms => new Date(ms).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  box.innerHTML = `
+    ${s.pausadoAte ? `<p class="rg-alert">⏸️ Jogo pausado até <b>${data(s.pausadoAte)}</b>. Apostas e depósitos voltam depois disso; saques seguem liberados.</p>` : ''}
+    <p class="note">${s.limite ? `Seu limite: <b>R$ ${money(s.limite.cents)} ${PER[s.limite.period]}</b> · usado R$ ${money(s.limite.usadoCents)}` : 'Sem limite de depósito.'}
+      ${s.limiteAgendado ? `<br>Mudança agendada para ${data(s.limiteAgendado.valeEm)}: ${s.limiteAgendado.cents ? 'R$ ' + money(s.limiteAgendado.cents) + ' ' + PER[s.limiteAgendado.period] : 'sem limite'}.` : ''}</p>
+    <div class="rg-row"><input id="rgVal" inputmode="decimal" placeholder="Limite R$"><select id="rgPer"><option value="dia">por dia</option><option value="semana">por semana</option><option value="mes">por mês</option></select>
+      <button id="rgSet" class="btn btn-2 small">Definir</button><button id="rgDel" class="btn btn-2 small">Remover</button></div>
+    <p class="note">Diminuir vale na hora. Aumentar ou remover vale só depois de 24h.</p>
+    <div class="rg-row">${s.opcoesPausaDias.map(d => `<button class="btn btn-2 small" data-p="${d}">Pausar ${d === 1 ? '1 dia' : d + ' dias'}</button>`).join('')}</div>`;
+  const done = (msg) => { toast(msg, 'gold'); renderResponsavel(); };
+  $('#rgSet').onclick = async () => {
+    const c = centsFromStr($('#rgVal').value);
+    if (!c) return toast('Digite um valor.', 'bad');
+    try { const r = await Api.setDepositLimit(c, $('#rgPer').value); done(r.aplicado === 'agora' ? '✅ Limite aplicado.' : '⏳ O novo limite vale em 24h.'); } catch (e) { toast(esc(e.message), 'bad'); }
+  };
+  $('#rgDel').onclick = async () => { try { await Api.setDepositLimit(null); done('⏳ O limite sai em 24h.'); } catch (e) { toast(esc(e.message), 'bad'); } };
+  $$('#rgBox [data-p]').forEach(b => b.onclick = async () => {
+    if (!confirm(`Pausar o jogo por ${b.dataset.p} dia(s)? Não dá pra desfazer antes do prazo.`)) return;
+    try { await Api.selfExclude(+b.dataset.p); done('⏸️ Jogo pausado. Cuide-se!'); } catch (e) { toast(esc(e.message), 'bad'); }
+  });
+}
 function renderSettings() {
+  renderResponsavel();
   $('#optMusic').checked = P.opt.music; $('#optSfx').checked = P.opt.sfx; $('#optVib').checked = P.opt.vib;
   $$('#optCtrl button').forEach(b => b.classList.toggle('on', b.dataset.v === P.opt.ctrl));
   $$('#optFx button').forEach(b => b.classList.toggle('on', b.dataset.v === P.opt.fx));

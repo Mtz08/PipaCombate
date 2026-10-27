@@ -8,7 +8,8 @@ export const fairRouter = Router();
 
 // Verificador publico: qualquer pessoa recalcula um round com as seeds.
 fairRouter.get('/verify', (req, res) => {
-  res.json(Fair.verify({ serverSeed: req.query.serverSeed, clientSeed: req.query.clientSeed, nonce: req.query.nonce }));
+  const { serverSeed, clientSeed, nonce, rtpBps, maxMultX100 } = req.query;
+  res.json(Fair.verify({ serverSeed, clientSeed, nonce, rtpBps, maxMultX100 }));
 });
 
 fairRouter.use(requireAuth);

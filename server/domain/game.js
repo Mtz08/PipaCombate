@@ -18,22 +18,26 @@ import { CONFIG } from '../config.js';
 import { applyCredit, applyDebit } from './wallet.js';
 import { activeSeed, windPoint } from './fairness.js';
 import { onRoundClosed } from './affiliates.js';
+import { getSetting } from './settings.js';
+import { assertCanPlay } from './responsible.js';
 
-const { rtpBps, maxMultX100, pctX100, maps: MAPS } = CONFIG.game;
-export const KINDS = Object.keys(pctX100);
+// RTP, teto, % por rival, forca e limites de aposta vem do painel (settings 'jogo').
+const MAPS = CONFIG.game.maps;
+export const KINDS = Object.keys(CONFIG.game.pctX100);
 
 /** Premio em centavos, arredondado para baixo. */
 export const prizeFor = (betCents, multX100) => Math.floor((betCents * multX100) / 100);
 
 export async function lobby() {
+  const g = await getSetting('jogo');
   return {
     maps: MAPS,
-    rtpPct: rtpBps / 100,
-    maxMult: maxMultX100 / 100,
-    forca: CONFIG.game.forca,
-    pct: Object.fromEntries(KINDS.map((k) => [k, pctX100[k] / 100])),
-    betMinCents: CONFIG.limits.betMinCents,
-    betMaxCents: CONFIG.limits.betMaxCents,
+    rtpPct: g.rtpBps / 100,
+    maxMult: g.maxMultX100 / 100,
+    forca: g.forca,
+    pct: Object.fromEntries(KINDS.map((k) => [k, g.pctX100[k] / 100])),
+    betMinCents: g.betMinCents,
+    betMaxCents: g.betMaxCents,
     top: (await Rounds.topWins(db, { days: 7, limit: 10 })).map((r) => ({ ...r, name: publicName(r.name) })),
   };
 }
@@ -54,17 +58,19 @@ export async function active(userId) {
 export async function start(userId, { betCents, map }) {
   const bet = Number(betCents);
   if (!Number.isInteger(bet)) throw domainError('INVALID_AMOUNT', 'Aposta invalida');
-  if (bet < CONFIG.limits.betMinCents || bet > CONFIG.limits.betMaxCents) {
-    throw domainError('OUT_OF_RANGE', 'Aposta fora do limite');
-  }
   const chosenMap = MAPS.includes(map) ? map : MAPS[0];
   try {
     return await withUserLock(userId, async (t, user) => {
+      assertCanPlay(user);
+      const g = await getSetting('jogo', t);
+      if (bet < g.betMinCents || bet > g.betMaxCents) throw domainError('OUT_OF_RANGE', 'Aposta fora do limite');
       if (await Rounds.openByUser(t, userId)) throw roundOpenError();
       const seed = await activeSeed(t, userId);
       const nonce = await FairSeeds.takeNonce(t, seed.id);
-      const ceilingX100 = windPoint(seed.serverSeed, seed.clientSeed, nonce);
-      const round = await Rounds.create(t, { userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100 });
+      const ceilingX100 = windPoint(seed.serverSeed, seed.clientSeed, nonce, g.rtpBps, g.maxMultX100);
+      const round = await Rounds.create(t, {
+        userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100, rtpBps: g.rtpBps, maxMultX100: g.maxMultX100,
+      });
       const balanceAfter = await applyDebit(t, user, bet, 'bet', { roundId: round.id, map: chosenMap });
       return { round: viewRound(round), balanceCents: balanceAfter };
     });
@@ -84,7 +90,8 @@ export async function cut(userId, roundId, { kind } = {}) {
     if (minGap > 0 && round.lastCutAt && Date.now() - round.lastCutAt < minGap) {
       throw domainError('TOO_FAST', 'Corte muito rapido', 429);
     }
-    const next = Math.min(round.multX100 + pctX100[kind], maxMultX100);
+    const g = await getSetting('jogo', t);
+    const next = Math.min(round.multX100 + g.pctX100[kind], round.maxMultX100);
     if (next >= round.ceilingX100) {
       await Rounds.recordCut(t, round.id, kind, next);
       const closed = await Rounds.close(t, round.id, 'lost', 0, 'wind');
@@ -127,6 +134,7 @@ export async function history(userId) {
     rounds: rows.map((r) => ({
       ...viewRound(r), nonce: r.nonce, clientSeed: r.clientSeed,
       serverSeedHash: r.serverSeedHash, serverSeed: r.serverSeed, createdAt: r.createdAt,
+      rtpBps: r.rtpBps, maxMultX100: r.maxMultX100, // parametros do sorteio desta rodada
     })),
   };
 }

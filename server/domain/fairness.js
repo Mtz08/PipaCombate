@@ -29,11 +29,11 @@ const newServerSeed = () => randomBytes(32).toString('hex');
 const newClientSeed = () => randomBytes(8).toString('hex');
 
 /** Ponto em que o vento vira, em centesimos (ex.: 231 = 2,31x). Funcao pura e publica. */
-export function windPoint(serverSeed, clientSeed, nonce) {
+export function windPoint(serverSeed, clientSeed, nonce, rtpBps = CONFIG.game.rtpBps, maxMultX100 = CONFIG.game.maxMultX100) {
   const h = createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}`).digest();
   const u = h.readUIntBE(0, 6) / 2 ** 48;
-  const x100 = Math.floor((CONFIG.game.rtpBps / (1 - u)) / 100);
-  return Math.min(x100, CONFIG.game.maxMultX100);
+  const x100 = Math.floor((rtpBps / (1 - u)) / 100);
+  return Math.min(x100, maxMultX100);
 }
 
 /** Par de seeds ativo do usuario, criando se nao existir. Dentro de transacao. */
@@ -94,11 +94,14 @@ async function assertNoOpenRound(t, userId) {
 }
 
 /** Verificador publico: recalcula um round a partir das seeds (nao consulta o banco). */
-export function verify({ serverSeed, clientSeed, nonce }) {
+export function verify({ serverSeed, clientSeed, nonce, rtpBps, maxMultX100 }) {
   const ss = String(serverSeed ?? ''), cs = String(clientSeed ?? ''), n = Number(nonce);
   if (!/^[0-9a-f]{64}$/.test(ss)) throw domainError('INVALID_SEED', 'Server seed invalida (64 caracteres hex)');
   if (!CLIENT_SEED_RE.test(cs)) throw domainError('INVALID_CLIENT_SEED', 'Client seed invalida');
   if (!Number.isInteger(n) || n < 0) throw domainError('INVALID_NONCE', 'Nonce invalido');
-  const windX100 = windPoint(ss, cs, n);
+  const rtp = rtpBps == null ? undefined : Number(rtpBps), max = maxMultX100 == null ? undefined : Number(maxMultX100);
+  if (rtp !== undefined && !(Number.isInteger(rtp) && rtp >= 1 && rtp < 10000)) throw domainError('INVALID_RTP', 'RTP invalido');
+  if (max !== undefined && !(Number.isInteger(max) && max >= 100)) throw domainError('INVALID_MAX', 'Teto invalido');
+  const windX100 = windPoint(ss, cs, n, rtp, max);
   return { serverSeedHash: sha256(ss), windX100, wind: windX100 / 100 };
 }

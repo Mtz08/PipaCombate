@@ -23,6 +23,11 @@ async function boot() {
     <section class="card"><h2>Saques para aprovar <small id="wqN"></small></h2>
       <p class="hint">O valor ja saiu do saldo do jogador. Aprovar envia o PIX; recusar devolve o valor ao saldo.</p>
       <ul id="wq" class="ledger"></ul><p id="wqMsg" class="msg"></p></section>
+    <section class="card"><h2>Jogo</h2>
+      <p class="hint">Vale para as próximas rodadas. Cada rodada guarda o RTP e o teto com que foi sorteada, então a verificação das antigas continua batendo.</p>
+      <form id="fJogo" class="aff-form"></form></section>
+    <section class="card"><h2>Limites de depósito e saque</h2><form id="fLim" class="aff-form"></form></section>
+    <section class="card"><h2>Textos e botões públicos</h2><form id="fPub" class="aff-form"></form></section>
     <section class="card"><h2>Indique e ganhe</h2><div id="affStats" class="grid"></div>
       <form id="affForm" class="aff-form">
         <label class="check"><input type="checkbox" name="ativo"> Programa ativo</label>
@@ -43,6 +48,77 @@ async function boot() {
   $('#btnQ').onclick = search; $('#q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
   $('#btnExpire').onclick = async () => { const r = await api('expire-rounds', {}); alert(`${r.expired} round(s) encerrado(s).`); stats(); };
   stats(); search(); audit(); withdrawals(); affiliates();
+  settingsForm('jogo', '#fJogo', JOGO); settingsForm('limites', '#fLim', LIMITES); publicoForm();
+}
+
+/* ---------- formularios de configuracao (settings) ----------
+   campo: [chave, rotulo, tipo] — tipo 'reais' (centavos), 'pct' (centesimos de %),
+   'mult' (x100), 'num' (decimal), 'pctx' (pctX100 por tipo de rival) */
+const RIVAIS = ['moleque', 'veloz', 'aparador', 'pesadao', 'cortador', 'chefe', 'aparar'];
+const JOGO = [
+  ['rtpBps', 'RTP (% devolvido em média)', 'pct'], ['maxMultX100', 'Ganho máximo por rodada (x a aposta)', 'mult'],
+  ['forca', 'Força dos rivais (1 = normal)', 'num'], ['betMinCents', 'Aposta mínima R$', 'reais'], ['betMaxCents', 'Aposta máxima R$', 'reais'],
+  ...RIVAIS.map((k) => [`pctX100.${k}`, `% por corte: ${k}`, 'pctx']),
+];
+const LIMITES = [
+  ['depositMinCents', 'Depósito mínimo R$', 'reais'], ['depositMaxCents', 'Depósito máximo R$', 'reais'],
+  ['withdrawMinCents', 'Saque mínimo R$', 'reais'], ['withdrawMaxCents', 'Saque máximo R$', 'reais'],
+  ['withdrawAutoMaxCents', 'Saque automático até R$ (0 = todos passam por aprovação)', 'reais'],
+];
+const conv = {
+  reais: [(v) => (v / 100).toFixed(2), (s) => Math.round(parseFloat(String(s).replace(',', '.')) * 100)],
+  pct: [(v) => (v / 100).toFixed(2), (s) => Math.round(parseFloat(String(s).replace(',', '.')) * 100)],
+  mult: [(v) => (v / 100).toFixed(2), (s) => Math.round(parseFloat(String(s).replace(',', '.')) * 100)],
+  pctx: [(v) => String(v), (s) => parseInt(s, 10)],
+  num: [(v) => String(v), (s) => parseFloat(String(s).replace(',', '.'))],
+};
+const getPath = (o, p) => p.split('.').reduce((a, k) => a?.[k], o);
+function setPath(o, p, v) { const ks = p.split('.'); const last = ks.pop(); ks.reduce((a, k) => (a[k] ??= {}), o)[last] = v; }
+
+async function settingsForm(key, sel, campos) {
+  const f = $(sel);
+  const { value } = await api(`settings/${key}`);
+  f.innerHTML = campos.map(([k, rot, tipo]) => `<div class="row"><b>${esc(rot)}</b><input name="${esc(k)}" value="${esc(conv[tipo][0](getPath(value, k)))}"></div>`).join('')
+    + '<div class="row"><button class="primary" type="submit">Salvar</button><button type="button" class="link" data-reset>voltar ao padrão</button></div><p class="msg"></p>';
+  const msg = f.querySelector('.msg');
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const v = JSON.parse(JSON.stringify(value));
+    for (const [k, , tipo] of campos) setPath(v, k, conv[tipo][1](f.elements[k].value));
+    try { await api(`settings/${key}`, { value: v }); msg.textContent = 'Salvo.'; audit(); } catch (err) { msg.textContent = err.message; }
+  };
+  f.querySelector('[data-reset]').onclick = async () => {
+    if (!confirm('Voltar esta seção para os valores padrão?')) return;
+    await api(`settings/${key}`, { value: null }); settingsForm(key, sel, campos); audit();
+  };
+}
+
+async function publicoForm() {
+  const f = $('#fPub');
+  const { value: v } = await api('settings/publico');
+  const linha = (c) => `<div class="row" data-chip><b>Botão R$</b><input name="v" value="${(c / 100).toFixed(2)}"><input name="r" placeholder="rótulo" value="${esc(v.depositoRotulos[c] || '')}"><input name="c" type="color" value="${esc(v.depositoCores[c] || '#f59e0b')}"></div>`;
+  f.innerHTML = `<div class="row"><b>Nome do site</b><input name="siteNome" value="${esc(v.siteNome)}"></div>
+    <p class="hint">Botões de depósito rápido (até 8). Deixe o valor vazio para remover.</p>
+    <div id="pubChips">${v.depositoRapidoCents.map(linha).join('')}</div>
+    <div class="row"><button type="button" data-add>+ botão</button></div>
+    <p class="hint">Links de suporte (https://), um por linha no formato: Nome | https://...</p>
+    <textarea name="suporte" rows="3">${esc(v.suporte.map((s) => `${s.nome} | ${s.url}`).join('\n'))}</textarea>
+    <div class="row"><button class="primary" type="submit">Salvar</button></div><p class="msg"></p>`;
+  f.querySelector('[data-add]').onclick = () => { if (f.querySelectorAll('[data-chip]').length < 8) $('#pubChips').insertAdjacentHTML('beforeend', linha(1000)); };
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const chips = [], rot = {}, cor = {};
+    f.querySelectorAll('[data-chip]').forEach((row) => {
+      const c = Math.round(parseFloat(row.querySelector('[name=v]').value.replace(',', '.')) * 100);
+      if (!c) return;
+      chips.push(c); rot[c] = row.querySelector('[name=r]').value; cor[c] = row.querySelector('[name=c]').value;
+    });
+    const suporte = f.suporte.value.split('\n').map((l) => l.split('|').map((x) => x.trim())).filter((p) => p[1]).map(([nome, url]) => ({ nome, url }));
+    try {
+      await api('settings/publico', { value: { siteNome: f.siteNome.value, depositoRapidoCents: chips, depositoRotulos: rot, depositoCores: cor, suporte } });
+      f.querySelector('.msg').textContent = 'Salvo.'; audit();
+    } catch (err) { f.querySelector('.msg').textContent = err.message; }
+  };
 }
 
 const reais = (c) => (c / 100).toFixed(2), cents = (v) => Math.round(parseFloat(String(v).replace(',', '.')) * 100) || 0;

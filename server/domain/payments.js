@@ -23,16 +23,22 @@ import { seal, open, cpfHash } from '../util/crypto.js';
 import { audit } from './audit.js';
 import { applyCredit, applyDebit } from './wallet.js';
 import * as Affiliates from './affiliates.js';
+import { getSetting } from './settings.js';
+import { assertCanDeposit } from './responsible.js';
 
 // ---------- Deposito ----------
 
 export async function createDeposit(userId, amountCents) {
-  assertCentsInRange(amountCents, CONFIG.limits.depositMinCents, CONFIG.limits.depositMaxCents, 'deposito');
-  if (!(await Users.getById(db, userId))) throw domainError('NOT_FOUND', 'Usuario inexistente', 404);
+  const lim = await getSetting('limites');
+  assertCentsInRange(amountCents, lim.depositMinCents, lim.depositMaxCents, 'deposito');
 
   const provider = getProvider();
   const expiresAt = Date.now() + CONFIG.payments.chargeTtlMs;
-  const created = await tx((t) => Charges.create(t, { userId, amountCents, provider: CONFIG.payments.provider, expiresAt }));
+  // trava o jogador: o limite de deposito conta as cobrancas pendentes
+  const created = await withUserLock(userId, async (t, user) => {
+    await assertCanDeposit(t, user, amountCents);
+    return Charges.create(t, { userId, amountCents, provider: CONFIG.payments.provider, expiresAt });
+  });
 
   const pix = await provider.createPixCharge({ chargeId: created.id, amountCents, expiresAt });
   let charge = await tx((t) => Charges.attachPix(t, created.id, pix));
@@ -89,9 +95,10 @@ export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, sour
   const key = normalizePixKey(pixKey);
   const doc = assertCpf(cpf); // nunca em claro no banco (LGPD): so cifrado enquanto espera aprovacao
   const fromAff = source === 'affiliate';
-  if (!fromAff) assertCentsInRange(amountCents, CONFIG.limits.withdrawMinCents, CONFIG.limits.withdrawMaxCents, 'saque');
+  const lim = await getSetting('limites');
+  if (!fromAff) assertCentsInRange(amountCents, lim.withdrawMinCents, lim.withdrawMaxCents, 'saque');
   else if (!Number.isInteger(amountCents) || amountCents <= 0) throw domainError('INVALID_AMOUNT', 'Valor invalido');
-  const review = amountCents > CONFIG.limits.withdrawAutoMaxCents;
+  const review = amountCents > lim.withdrawAutoMaxCents;
 
   const { withdrawal, balanceCents } = await withUserLock(userId, async (t, user) => {
     if (await Withdrawals.pendingByUser(t, userId)) {

@@ -135,3 +135,5 @@ button.ghost { background: transparent; border: 1px solid var(--line); color: va
 .aff-form .row b{min-width:180px;font-size:.85rem;color:var(--mut)}
 .aff-form .row input{max-width:90px}
 .aff-form select{width:100%;padding:10px;border-radius:10px;background:var(--bg2);color:var(--fg);border:1px solid var(--line)}
+.aff-form textarea{width:100%;font-family:inherit}
+.aff-form input[type=color]{max-width:48px;padding:2px;height:40px}

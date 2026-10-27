@@ -191,7 +191,9 @@ Feito: comissão em até 3 níveis com modelo escolhido no admin (CPA fixo no 1�
 - Regra de comissão (a definir: % do depósito ou da receita líquida) e saldo de afiliado separado.
 - Saque de afiliado com o mesmo fluxo de aprovação.
 
-### Fase 6: Admin e configuração pública
+### Fase 6: Admin e configuração pública ✅ concluída em 27/10/2026
+Feito: parâmetros do jogo editáveis no painel (RTP 90–99%, ganho máximo, % por rival, força dos rivais, aposta mín./máx.), com cada rodada guardando o RTP e o teto do sorteio (`rounds.rtp_bps`, `max_mult_x100`) para a verificação continuar valendo; limites de depósito/saque e saque automático pelo painel; textos públicos (nome, botões de depósito rápido com rótulo e cor, links de suporte) e `/api/public/config` vindo do painel; jogo responsável na tela de ajustes (limite de depósito por dia/semana/mês — reduzir vale na hora, aumentar só em 24h — e pausa de 1 a 365 dias que bloqueia aposta e depósito). Migração `008_parametros_jogo_responsavel.sql`. 56/56 testes.
+
 - `GET /api/public/config` com os mesmos campos do antigo (valores rápidos, limites, popup e pixels).
 - Painel: usuários, rodadas, depósitos, saques, afiliados, parâmetros do jogo (RTP, teto e % por rival) e auditoria.
 - Jogo responsável: limites de depósito por usuário, autoexclusão e alertas.
