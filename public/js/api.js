@@ -77,7 +77,14 @@ function toHistory(r) {
 }
 const toTop = (t) => ({ username: t.name, map: t.map, stake: t.betCents, win: t.prizeCents, at: t.at });
 
-const LEDGER_SHOWN = ['deposit', 'withdraw', 'withdraw_reversal', 'bonus', 'adjust', 'commission'];
+/* extrato: depósitos e saques vêm com status próprio; do livro-caixa entram só
+   os créditos/débitos avulsos (bônus, ajuste do admin, comissão) */
+const LEDGER_SHOWN = ['bonus', 'adjust', 'commission'];
+const DEP_ST = { paid: ['PAID', 'pago'], pending: ['PENDING', 'aguardando PIX'], expired: ['CANCELED', 'expirado'], review: ['PENDING', 'em análise'] };
+const SAQ_ST = {
+  review: ['PENDING', 'em análise'], processing: ['PENDING', 'enviando'], paid: ['PAID', 'pago'],
+  failed: ['FAILED', 'falhou · estornado'], rejected: ['REJECTED', 'recusado · estornado'],
+};
 
 export const Api = {
   /* ---- conta ---- */
@@ -119,10 +126,14 @@ export const Api = {
   /* ---- carteira ---- */
   async wallet() {
     const j = await call('wallet');
-    const transactions = (j.ledger || []).filter((t) => LEDGER_SHOWN.includes(t.type)).map((t) => ({
-      type: t.type, amountCents: Math.abs(t.deltaCents), status: 'COMPLETED', at: t.at,
-    }));
-    return { balanceCents: j.balanceCents, transactions };
+    const tx = [
+      ...(j.deposits || []).map((d) => ({ type: 'deposit', amountCents: d.amountCents, pos: true, at: d.createdAt, status: (DEP_ST[d.status] || ['PENDING'])[0], statusLabel: (DEP_ST[d.status] || [0, d.status])[1] })),
+      ...(j.withdrawals || []).map((w) => ({ type: 'withdraw', amountCents: w.amountCents, pos: false, at: w.createdAt, status: (SAQ_ST[w.status] || ['PENDING'])[0], statusLabel: (SAQ_ST[w.status] || [0, w.status])[1], note: w.note })),
+      ...(j.ledger || []).filter((t) => LEDGER_SHOWN.includes(t.type)).map((t) => ({
+        type: t.type, amountCents: Math.abs(t.deltaCents), pos: t.deltaCents > 0, at: t.at, status: 'COMPLETED', statusLabel: '',
+      })),
+    ].sort((a, b) => (b.at || 0) - (a.at || 0));
+    return { balanceCents: j.balanceCents, transactions: tx };
   },
   async depositInfo() {
     const j = await call('wallet/deposit-info');

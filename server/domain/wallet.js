@@ -7,8 +7,10 @@
 //    atomica. Recebem o executor `t` e o usuario ja travado (FOR UPDATE).
 
 import { db, withUserLock } from '../db/index.js';
-import { Users, Ledger } from '../db/repos.js';
+import { Users, Ledger, Withdrawals, Charges } from '../db/repos.js';
 import { domainError } from '../util/money.js';
+
+const viewWithdrawalRow = (w) => ({ id: w.id, amountCents: w.amountCents, status: w.status, pixKeyMask: w.pixKeyMask, createdAt: w.createdAt, note: w.reviewNote });
 
 function assertAmount(amountCents) {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
@@ -51,5 +53,11 @@ export async function snapshot(userId) {
   return {
     balanceCents: user.balanceCents,
     ledger: await Ledger.recent(db, userId, 20), // mais recentes primeiro
+    // pedidos com status (aguardando aprovacao, pago, recusado...) para o extrato
+    withdrawals: (await Withdrawals.recentByUser(db, userId, 20)).map(viewWithdrawalRow),
+    deposits: (await Charges.recentByUser(db, userId, 20)).map((c) => ({
+      id: c.id, amountCents: c.amountCents, createdAt: c.createdAt,
+      status: c.status === 'pending' && Date.now() > c.expiresAt ? 'expired' : c.status,
+    })),
   };
 }

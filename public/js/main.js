@@ -1455,13 +1455,14 @@ async function loadExtrato() {
     const j = await Api.wallet();
     if (typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
     const tx = j.transactions || [];
-    const label = { deposit: 'Depósito', withdraw: 'Saque', withdrawal: 'Saque', bonus: 'Bônus', commission: 'Comissão' };
+    const label = { deposit: 'Depósito', withdraw: 'Saque', withdrawal: 'Saque', bonus: 'Bônus', commission: 'Comissão', adjust: 'Ajuste' };
     const st = { COMPLETED: 'ok', PAID: 'ok', PENDING: 'pend', FAILED: 'fail', CANCELED: 'fail', REJECTED: 'fail' };
     $('#wExtEmpty').hidden = tx.length > 0;
     $('#wExtList').innerHTML = tx.map(t => {
-      const c = (t.amountCents ?? 0), pos = String(t.type || '').match(/dep|bonus|commiss/i);
+      const c = (t.amountCents ?? 0), pos = t.pos ?? String(t.type || '').match(/dep|bonus|commiss/i);
       const s = st[String(t.status || '').toUpperCase()] || 'pend';
-      return `<li><span>${esc(label[t.type] || t.type || 'Movimentação')} <small class="tag ${s}">${esc(t.status || '')}</small></span><span class="amt ${pos ? 'green' : 'red'}">${pos ? '+' : '−'}${money(Math.abs(c))}</span></li>`;
+      const tag = t.statusLabel ?? t.status ?? '';
+      return `<li><span>${esc(label[t.type] || t.type || 'Movimentação')} ${tag ? `<small class="tag ${s}">${esc(tag)}</small>` : ''}${t.note ? `<small class="note-x">${esc(t.note)}</small>` : ''}</span><span class="amt ${pos ? 'green' : 'red'}">${pos ? '+' : '−'}${money(Math.abs(c))}</span></li>`;
     }).join('');
   } catch (e) { apiError(e); }
 }
@@ -1546,11 +1547,12 @@ $('#wSaqBtn').onclick = async () => {
   if (cpf.length !== 11) { err.textContent = 'CPF inválido (11 dígitos).'; err.hidden = false; Sound.deny(); return; }
   btn.disabled = true; btn.classList.add('loading');
   try {
-    await Api.withdraw(cents, pix, cpf);
+    const r = await Api.withdraw(cents, pix, cpf);
     const j = await Api.wallet().catch(() => null);
     if (j && typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
     $('#wSaqVal').value = '';
-    toast('✅ Saque solicitado! Acompanhe pelo extrato.', 'green'); Sound.cheer(1);
+    const st = r && r.withdrawal && r.withdrawal.status;
+    toast(st === 'paid' ? '✅ Saque enviado pro seu PIX!' : st === 'review' ? '⏳ Saque solicitado! Ele passa por uma análise rápida — acompanhe pelo extrato.' : '✅ Saque solicitado! Acompanhe pelo extrato.', 'green'); Sound.cheer(1);
     walletTab('ext');
   } catch (e) { err.textContent = e.message; err.hidden = false; Sound.deny(); }
   finally { btn.disabled = false; btn.classList.remove('loading'); }

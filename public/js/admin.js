@@ -20,13 +20,40 @@ async function boot() {
     <header><div class="brand small"><span class="logo"></span><b>Admin</b></div><a class="link" href="/">voltar ao jogo</a></header>
     <section class="card"><h2>Numeros</h2><div id="stats" class="grid"></div>
       <button id="btnExpire" class="link">encerrar rounds abandonados agora</button></section>
+    <section class="card"><h2>Saques para aprovar <small id="wqN"></small></h2>
+      <p class="hint">O valor ja saiu do saldo do jogador. Aprovar envia o PIX; recusar devolve o valor ao saldo.</p>
+      <ul id="wq" class="ledger"></ul><p id="wqMsg" class="msg"></p></section>
     <section class="card"><h2>Jogadores</h2>
       <div class="row"><input id="q" placeholder="Telefone ou nome"><button id="btnQ">Buscar</button></div>
       <ul id="users" class="ledger"></ul><div id="detail"></div></section>
     <section class="card"><h2>Auditoria</h2><ul id="audit" class="ledger"></ul></section>`;
   $('#btnQ').onclick = search; $('#q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
   $('#btnExpire').onclick = async () => { const r = await api('expire-rounds', {}); alert(`${r.expired} round(s) encerrado(s).`); stats(); };
-  stats(); search(); audit();
+  stats(); search(); audit(); withdrawals();
+}
+
+async function withdrawals() {
+  const { withdrawals: list } = await api('withdrawals');
+  $('#wqN').textContent = list.length ? `(${list.length})` : '';
+  $('#wq').innerHTML = list.map((w) => `<li data-id="${esc(w.id)}">
+      <span>${brl(w.amountCents)} · <b>${esc(w.userName)}</b> <small>${esc(w.userPhone)} · chave ${esc(w.pixKeyMask)} · saldo ${brl(w.userBalanceCents)} · conta desde ${new Date(w.userSince).toLocaleDateString('pt-BR')}</small></span>
+      <small>${dt(w.createdAt)}</small>
+      <span class="row"><button class="cash" data-a="approve">Aprovar</button><button data-a="reject">Recusar</button><button class="link" data-a="user">ver jogador</button></span>
+    </li>`).join('') || '<li class="hint">Nenhum saque esperando.</li>';
+  $('#wq').onclick = async (e) => {
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const li = b.closest('li[data-id]'), id = li.dataset.id;
+    if (b.dataset.a === 'user') return detail(list.find((w) => w.id === id).userId);
+    const body = b.dataset.a === 'reject' ? { note: prompt('Motivo da recusa (o jogador vê no extrato):') } : {};
+    if (b.dataset.a === 'reject' && !body.note) return;
+    if (b.dataset.a === 'approve' && !confirm('Aprovar e enviar o PIX?')) return;
+    li.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+    try {
+      await api(`withdrawals/${encodeURIComponent(id)}/${b.dataset.a}`, body);
+      $('#wqMsg').textContent = b.dataset.a === 'approve' ? 'Saque aprovado.' : 'Saque recusado e estornado.';
+    } catch (err) { $('#wqMsg').textContent = err.message; }
+    withdrawals(); stats(); audit();
+  };
 }
 
 async function stats() {

@@ -37,6 +37,7 @@ walletRouter.get('/deposit/:id', wrap(async (req, res) => {
 walletRouter.get('/withdraw-info', (_req, res) => res.json({
   minCents: CONFIG.limits.withdrawMinCents,
   maxCents: CONFIG.limits.withdrawMaxCents,
+  autoMaxCents: CONFIG.limits.withdrawAutoMaxCents, // acima disso, passa por aprovacao
 }));
 
 walletRouter.post('/withdraw', wrap(async (req, res) => {

@@ -32,6 +32,9 @@ export const CONFIG = {
   },
 
   sessionSecret: env.SESSION_SECRET || DEV_SECRET,
+  // Chave para cifrar dados sensiveis em repouso (CPF do saque em analise) e
+  // para o hash do CPF do titular. Obrigatoria em producao (min. 32 caracteres).
+  dataKey: env.DATA_KEY || DEV_SECRET,
   sessionTtlMs: 1000 * 60 * 60 * 8, // 8h
 
   payments: {
@@ -65,6 +68,9 @@ export const CONFIG = {
     depositMaxCents: 1000000,
     withdrawMinCents: 10000,
     withdrawMaxCents: 500000,
+    // Saques ate este valor sao enviados direto ao PSP; acima, aguardam aprovacao
+    // no admin. 0 = todo saque passa por aprovacao.
+    withdrawAutoMaxCents: Number(env.WITHDRAW_AUTO_MAX_CENTS) || 0,
     betMinCents: 500,
     betMaxCents: 100000,
   },
@@ -96,6 +102,7 @@ if (isProd) {
   const problems = [];
   if (!env.DATABASE_URL) problems.push('DATABASE_URL (PGlite nao e para producao)');
   if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) problems.push('SESSION_SECRET (min. 32 caracteres)');
+  if (!env.DATA_KEY || env.DATA_KEY.length < 32) problems.push('DATA_KEY (min. 32 caracteres)');
   if (CONFIG.payments.provider !== 'mock' && (!env.PAYMENTS_WEBHOOK_SECRET || env.PAYMENTS_WEBHOOK_SECRET.length < 32)) {
     problems.push('PAYMENTS_WEBHOOK_SECRET (min. 32 caracteres)');
   }

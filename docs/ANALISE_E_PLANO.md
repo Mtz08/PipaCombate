@@ -175,7 +175,10 @@ Feito: ranking "Maiores ganhos" (7 dias, só saques com lucro, nome abreviado "A
 - Ranking e tela "como jogar".
 - Recuperação de rodada pendente (reconexão), como o antigo fazia com `pipacombate_pending`.
 
-### Fase 4: Carteira (sem gateway real)
+### Fase 4: Carteira (sem gateway real) ✅ concluída em 27/10/2026
+Feito: saque com aprovação no admin (status `review` → aprovado envia ao PSP; recusado exige motivo e estorna), aprovação automática até `WITHDRAW_AUTO_MAX_CENTS` (padrão 0 = todo saque é analisado), um saque em andamento por vez, CPF do titular vinculado à conta pelo hash (HMAC com `DATA_KEY`), CPF cifrado (AES-256-GCM) só enquanto o saque espera e apagado ao finalizar; extrato com status (depósito pago/aguardando/expirado, saque em análise/pago/recusado); fila "Saques para aprovar" no admin, com auditoria. Migração `006_saque_aprovacao.sql`. 47/47 testes.
+Pendente para a Fase 6: limites (mín./máx./auto) editáveis pelo painel; hoje vêm de `server/config.js` e do ambiente.
+
 - Saldo, extrato e ledger em centavos (já existe; revisar).
 - Depósito com o **mock** (QR falso e confirmação manual pelo admin).
 - Solicitação de saque (chave PIX + CPF validado) com aprovação no admin.

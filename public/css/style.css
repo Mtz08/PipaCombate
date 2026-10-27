@@ -451,3 +451,4 @@ body.pixel .tab{font-size:10px}
 .fair-kv li span{color:var(--mut)}
 .fair-kv li b{text-align:right;word-break:break-all}
 .fair-kv .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.note-x{display:block;color:var(--mut);font-size:11px;font-weight:700}
