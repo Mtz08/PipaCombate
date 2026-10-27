@@ -164,6 +164,8 @@ async function publicoForm() {
       <select name="popAcao">${[['fechar', 'só fecha'], ['depositar', 'abre o depósito'], ['indicar', 'abre o indique e ganhe'], ['link', 'abre um link']].map(([k, t]) => `<option value="${k}" ${v.popup.botaoAcao === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <div class="row"><b>Link do botão</b><input name="popUrl" value="${esc(v.popup.botaoUrl)}"></div>
     <div class="row"><b>Mostrar</b><select name="popFreq">${[['sessao', 'uma vez por visita'], ['diaria', 'uma vez por dia'], ['sempre', 'toda vez que abrir o lobby']].map(([k, t]) => `<option value="${k}" ${v.popup.frequencia === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <p class="hint">Texto legal do rodapé (empresa, CNPJ, número da autorização). Só aparece se preenchido: não invente número.</p>
+    <textarea name="rodapeLegal" rows="2" maxlength="300">${esc(v.rodapeLegal || '')}</textarea>
     <p class="hint">Links de suporte (https://), um por linha no formato: Nome | https://...</p>
     <textarea name="suporte" rows="3">${esc(v.suporte.map((s) => `${s.nome} | ${s.url}`).join('\n'))}</textarea>
     <div class="row"><button class="primary" type="submit">Salvar</button></div><p class="msg"></p>`;
@@ -182,7 +184,7 @@ async function publicoForm() {
         ativo: f.popAtivo.checked, titulo: f.popTitulo.value, mensagem: f.popMsg.value, imagemUrl: f.popImg.value.trim(),
         botaoTexto: f.popBtn.value, botaoAcao: f.popAcao.value, botaoUrl: f.popUrl.value.trim(), frequencia: f.popFreq.value,
       };
-      await api('settings/publico', { value: { siteNome: f.siteNome.value, depositoRapidoCents: chips, depositoRotulos: rot, depositoCores: cor, suporte, popup } });
+      await api('settings/publico', { value: { siteNome: f.siteNome.value, depositoRapidoCents: chips, depositoRotulos: rot, depositoCores: cor, suporte, popup, rodapeLegal: f.rodapeLegal.value } });
       f.querySelector('.msg').textContent = 'Salvo.'; audit();
     } catch (err) { f.querySelector('.msg').textContent = err.message; }
   };

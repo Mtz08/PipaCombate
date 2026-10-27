@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { CONFIG } from '../config.js';
 import { wrap } from '../middleware/error.js';
 import { getSetting } from '../domain/settings.js';
+import { db } from '../db/index.js';
+import { Withdrawals } from '../db/repos.js';
+import { publicName } from '../domain/game.js';
 
 export const publicRouter = Router();
 
@@ -17,10 +20,19 @@ publicRouter.get('/config', wrap(async (_req, res) => {
     deposito_botoes_labels: Object.fromEntries(Object.entries(pub.depositoRotulos).map(([c, v]) => [c / 100, v])),
     deposito_botoes_cores: Object.fromEntries(Object.entries(pub.depositoCores).map(([c, v]) => [c / 100, v])),
     suporte_links: pub.suporte,
+    rodape_legal: pub.rodapeLegal,
     fin: { deposito_minimo: lim.depositMinCents / 100, deposito_maximo: lim.depositMaxCents / 100, saque_minimo: lim.withdrawMinCents / 100, saque_maximo: lim.withdrawMaxCents / 100 },
     jogo: { rtp: jogo.rtpBps / 100, ganho_maximo: jogo.maxMultX100 / 100 },
     popup: pub.popup,
     pixel_meta_id: mkt.metaPixelId, pixel_tiktok_id: mkt.tiktokPixelId,
     utmify_pixel_id: mkt.utmifyPixelId, utmify_utms: mkt.utmifyUtms,
   });
+}));
+
+// Ultimos saques PAGOS de verdade (nada inventado): nome abreviado, valor e hora.
+// Lista vazia = a tela esconde a secao.
+publicRouter.get('/saques-recentes', wrap(async (_req, res) => {
+  const rows = await Withdrawals.recentPaid(db, { days: 7, limit: 10 });
+  res.set('Cache-Control', 'public, max-age=30');
+  res.json({ saques: rows.map((r) => ({ nome: publicName(r.name), valorCents: r.amountCents, em: r.at })) });
 }));

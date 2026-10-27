@@ -164,3 +164,19 @@ test('headers de seguranca presentes e sem x-powered-by', async () => {
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(r.headers.get('x-powered-by'), null);
 });
+
+test('saques recentes publicos: so saques PAGOS, com nome abreviado', async () => {
+  const c = await signedUp(); // "Ana"
+  await c('POST', '/api/wallet/deposit', { amountCents: 50000 });
+  const me = await c('GET', '/api/auth/me');
+  await db.query("UPDATE users SET wager_required_cents = 0, name = 'Ana Paula Souza' WHERE id = $1", [me.body.user.id]);
+  const w = await c('POST', '/api/wallet/withdraw', { amountCents: 10000, pixKey: 'ana@exemplo.com', cpf: '11144477735', password: 'senha-forte-1' });
+  assert.equal(w.body.withdrawal.status, 'review'); // ainda nao pago: nao aparece
+  let r = await client()('GET', '/api/public/saques-recentes');
+  assert.ok(!r.body.saques.some((s) => s.nome === 'Ana S.'));
+  await db.query("UPDATE withdrawals SET status = 'paid', updated_at = now() WHERE id = $1", [w.body.withdrawal.id]);
+  r = await client()('GET', '/api/public/saques-recentes');
+  const s = r.body.saques.find((x) => x.nome === 'Ana S.');
+  assert.equal(s.valorCents, 10000);
+  assert.equal(JSON.stringify(r.body).includes('Paula'), false);
+});

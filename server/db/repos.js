@@ -254,6 +254,15 @@ export const Withdrawals = {
     return (await q.query('SELECT * FROM withdrawals WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2', [userId, limit])).map(mapWithdrawal);
   },
   /** Fila do admin: aguardando aprovacao, mais antigos primeiro. */
+  /** Saques pagos recentes (prova social real): so nome, valor e hora. */
+  async recentPaid(q, { days = 7, limit = 10 } = {}) {
+    const rows = await q.query(
+      `SELECT u.name, w.amount_cents, w.updated_at FROM withdrawals w JOIN users u ON u.id = w.user_id
+        WHERE w.status = 'paid' AND w.updated_at > now() - make_interval(days => $1)
+        ORDER BY w.updated_at DESC LIMIT $2`, [days, limit],
+    );
+    return rows.map((r) => ({ name: r.name, amountCents: Number(r.amount_cents), at: ms(r.updated_at) }));
+  },
   async reviewQueue(q, limit = 100) {
     const rows = await q.query(
       `SELECT w.*, u.name AS user_name, u.phone AS user_phone, u.balance_cents AS user_balance, u.created_at AS user_since

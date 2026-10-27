@@ -477,3 +477,59 @@ body.pixel .tab{font-size:10px}
 #wDepChips .chip.on{outline:3px solid #fff;outline-offset:1px}
 #wDepMin{margin-top:2px}
 .bonus-banner{background:linear-gradient(90deg,#16a34a,#22c55e);color:#fff;border:3px solid var(--ol);border-radius:14px;padding:9px 12px;font-weight:900;font-size:13px;line-height:1.35;box-shadow:0 3px 0 var(--ol)}
+
+/* =====================================================================
+   TEMA SÉRIO — a moldura da plataforma fica sóbria (o jogo segue cartoon).
+   Fundo escuro, acento dourado, cards limpos, títulos discretos.
+   ===================================================================== */
+:root{--ol:#070b14;--panel:#111a2c;--panel2:#16213a;--panel3:#1e2b4a;--mut:#97a3bd;--gold:#f2c14e;--line:rgba(255,255,255,.08)}
+body{background:#070b14 radial-gradient(ellipse at 50% 0%,#15203a 0%,#070b14 65%)}
+body::before{opacity:.025}
+#app{background:#0a1120}
+
+/* topo: identidade e saldo */
+.lb-top{background:linear-gradient(180deg,rgba(7,11,20,.96),rgba(7,11,20,.6));border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+.lb-top .me{background:var(--panel);border:1px solid var(--line);box-shadow:none;border-radius:14px}
+.lb-top .bal{background:var(--panel);border:1px solid rgba(242,193,78,.45);box-shadow:0 0 0 3px rgba(242,193,78,.08)}
+.lb-top .round-btn{background:var(--panel);border:1px solid var(--line);box-shadow:none}
+
+/* cards do lobby */
+.lobby .sec{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 28px rgba(0,0,0,.35);padding:16px 14px 14px}
+.lobby .sec::before,.lb-bottom::before{display:none}
+.sec-h{font-family:'Nunito',system-ui,sans-serif;font-weight:900;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:#dfe5f1;text-shadow:none;margin-bottom:12px}
+.sec-h .kt{opacity:.85}
+.indica-card{background:linear-gradient(90deg,#1b2540,#141d33);border:1px solid rgba(242,193,78,.35);box-shadow:none;border-radius:16px}
+.indica-card:active{transform:translateY(1px);box-shadow:none}
+
+/* barra de aposta */
+.lb-bottom{background:rgba(7,11,20,.97);border-top:1px solid var(--line);backdrop-filter:blur(6px)}
+
+/* selos de confiança */
+.trust-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:2px 0 4px}
+.trust{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px;border-radius:12px;background:var(--panel);border:1px solid var(--line);color:#dfe5f1;text-align:center;font:inherit}
+.trust b{font-family:'Nunito',sans-serif;font-weight:900;font-size:15px;color:var(--gold);line-height:1.1}
+.trust span{font-size:10.5px;font-weight:800;color:var(--mut);line-height:1.25}
+button.trust{cursor:pointer}
+
+/* últimos saques pagos */
+.pagos{list-style:none;display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.pagos li{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);font-size:13px;font-weight:800}
+.pagos .pg-ok{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#16a34a;color:#fff;font-size:12px}
+.pagos b{color:#4ade80;font-family:'Nunito',sans-serif;font-weight:900}
+.pagos small{color:var(--mut);font-weight:700;font-size:11px}
+
+/* rodapé */
+.lb-foot{display:flex;flex-direction:column;gap:8px;padding:10px 4px 6px;border-top:1px solid var(--line);margin-top:4px;text-align:center}
+.lb-foot nav{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px}
+.lb-foot nav a,.lb-foot nav .link,#footSuporte a{color:var(--mut);font-size:12px;font-weight:800;text-decoration:none}
+#footSuporte{display:contents}
+.foot-18{font-size:11px;color:var(--mut);font-weight:700}
+.foot-18 b{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;border:2px solid #ef4444;color:#ef4444;font-size:10px;margin-right:4px;vertical-align:middle}
+.foot-legal{font-size:10.5px;color:#6b7690;font-weight:700}
+
+/* folhas (carteira, indique, ajustes) */
+.sheet{background:linear-gradient(180deg,#0f1729,#0a1120)}
+.tabs{background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.tab.on{background:var(--gold);color:#1a1300;box-shadow:none}
+.panel{background:var(--panel);border:1px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.lb-foot{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 10px;margin:6px 0 4px}

@@ -119,6 +119,20 @@
       <button id="mapTag" class="map-tag"></button>
     </div>
 
+    <!-- selos de confianca: so fatos verificaveis -->
+    <div class="trust-strip">
+      <button class="trust" data-sheet="how"><b>🔒</b><span>Sorteio<br>verificável</span></button>
+      <div class="trust"><b id="trustRtp">—</b><span>retorno<br>médio (RTP)</span></div>
+      <div class="trust"><b>PIX</b><span>depósito<br>e saque</span></div>
+      <button class="trust" data-sheet="settings"><b>18+</b><span>jogo<br>responsável</span></button>
+    </div>
+
+    <section id="secPagos" class="sec" hidden>
+      <h3 class="sec-h"><i class="kt"></i>Últimos saques pagos</h3>
+      <ul id="pagosList" class="pagos"></ul>
+      <p class="note">Saques reais dos últimos 7 dias, enviados via PIX. Nome abreviado para proteger os jogadores.</p>
+    </section>
+
     <button id="indicaCard" class="indica-card" data-sheet="indicacao">
       <span class="indica-ic">🎁</span>
       <span class="indica-txt"><b>Indique e Ganhe</b><small>Convide amigos e ganhe % de cada depósito deles</small></span>
@@ -163,7 +177,17 @@
       </ol>
       <button class="link" data-sheet="how">Ver regras completas e rivais →</button>
     </section>
-    <p class="fine">🎮 +18 · Jogue com responsabilidade · Depósito e saque via PIX</p>
+    <footer class="lb-foot">
+      <nav>
+        <button class="link" data-sheet="how">Regras</button>
+        <a href="/termos.html" target="_blank" rel="noopener">Termos de uso</a>
+        <a href="/privacidade.html" target="_blank" rel="noopener">Privacidade</a>
+        <button class="link" data-sheet="settings">Jogo responsável</button>
+        <span id="footSuporte"></span>
+      </nav>
+      <p class="foot-18"><b>18+</b> Proibido para menores de 18 anos. Aposta envolve risco de perda: jogue só com o que pode perder.</p>
+      <p id="footLegal" class="foot-legal" hidden></p>
+    </footer>
   </div>
 
   <div class="lb-bottom">

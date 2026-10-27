@@ -123,6 +123,7 @@ export const Api = {
     return { balance: (await call('auth/me')).balanceCents };
   },
   history: () => call('game/history'),
+  saquesRecentes: () => call('public/saques-recentes'),
   fair: () => call('fair'),
   rotateSeed: () => post('fair/rotate'),
   setClientSeed: (clientSeed) => post('fair/client-seed', { clientSeed }),

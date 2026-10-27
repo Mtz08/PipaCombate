@@ -1708,7 +1708,25 @@ function enterLobby(msg) {
   renderLobby(); refreshLobby();
   if (msg) toastHtml(msg, 'gold');
   Sound.music('menu'); Sound.crowdAmb(0);
-  if (window.PCConfig) window.PCConfig.then(c => showPopup(c && c.popup)).catch(() => {});
+  if (window.PCConfig) window.PCConfig.then(c => { renderFooter(c); showPopup(c && c.popup); }).catch(() => {});
+}
+
+/* Ultimos saques pagos (dados reais da API; vazio = secao escondida) */
+async function renderPagos() {
+  let r;
+  try { r = await Api.saquesRecentes(); } catch (e) { return; }
+  const list = r.saques || [];
+  $('#secPagos').hidden = !list.length;
+  const quando = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 60 ? `há ${Math.max(1, m)} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} d`; };
+  $('#pagosList').innerHTML = list.map(s => `<li><span class="pg-ok">✓</span><span class="pg-n">${esc(s.nome)}</span><b>R$ ${money(s.valorCents)}</b><small>${quando(s.em)}</small></li>`).join('');
+}
+/* Rodape: links de suporte e texto legal configurados no painel */
+function renderFooter(c) {
+  if (!c) return;
+  const sup = (c.suporte_links || []).filter(s => /^https:\/\//i.test(s.url || ''));
+  $('#footSuporte').innerHTML = sup.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.nome)}</a>`).join('');
+  const fl = $('#footLegal');
+  fl.hidden = !c.rodape_legal; fl.textContent = c.rodape_legal || '';
 }
 
 /* Popup de aviso configurado no painel. frequencia: sessao | diaria | sempre */
@@ -1747,7 +1765,8 @@ async function refreshLobby() {
   try {
     const j = await Api.lobby();
     acct = { balance: j.balance, cfg: j.cfg, history: j.history, top: j.top, canRefill: j.canRefill };
-    if (j.cfg.rtp) $("#howRtp").textContent = String(j.cfg.rtp).replace(".", ",") + "%";
+    if (j.cfg.rtp) { $("#howRtp").textContent = String(j.cfg.rtp).replace(".", ",") + "%"; $('#trustRtp').textContent = String(j.cfg.rtp).replace('.', ',') + '%'; }
+    renderPagos();
     Auth.set(Auth.token, j.user);
     await retryPending();
     renderLobby();

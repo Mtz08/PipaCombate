@@ -155,6 +155,7 @@ export const SCHEMAS = {
       depositoRotulos: { 1000: 'MÍNIMO', 2000: 'BOM', 3000: 'ÓTIMO', 5000: 'EXCELENTE', 10000: 'TOP', 20000: 'VIP' },
       depositoCores: { 1000: '#16a34a', 2000: '#f59e0b', 3000: '#ef5d00', 5000: '#e11d48', 10000: '#7c3aed', 20000: '#450d59' },
       suporte: [], // [{ nome, url }]
+      rodapeLegal: '', // ex.: empresa, CNPJ e numero da autorizacao (aparece no rodape)
       popup: { ativo: false, titulo: '', mensagem: '', imagemUrl: '', botaoTexto: '', botaoAcao: 'fechar', botaoUrl: '', frequencia: 'sessao' },
     }),
     validar(v) {
@@ -187,7 +188,10 @@ export const SCHEMAS = {
       };
       if (popup.ativo && !popup.titulo && !popup.mensagem && !popup.imagemUrl) throw bad('popup ativo precisa de titulo, mensagem ou imagem');
       if (popup.botaoAcao === 'link' && !popup.botaoUrl) throw bad('popup: informe o link do botao');
-      return { siteNome: texto(v.siteNome, 40, 'nome do site') || 'Pipa Combate', depositoRapidoCents: chips, depositoRotulos: rotulos, depositoCores: cores, suporte, popup };
+      return {
+        siteNome: texto(v.siteNome, 40, 'nome do site') || 'Pipa Combate', depositoRapidoCents: chips, depositoRotulos: rotulos, depositoCores: cores,
+        suporte, popup, rodapeLegal: texto(v.rodapeLegal, 300, 'texto legal do rodape'),
+      };
     },
   },
 };
