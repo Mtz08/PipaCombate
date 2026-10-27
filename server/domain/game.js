@@ -24,7 +24,7 @@ export const KINDS = Object.keys(pctX100);
 /** Premio em centavos, arredondado para baixo. */
 export const prizeFor = (betCents, multX100) => Math.floor((betCents * multX100) / 100);
 
-export function lobby() {
+export async function lobby() {
   return {
     maps: MAPS,
     rtpPct: rtpBps / 100,
@@ -33,7 +33,15 @@ export function lobby() {
     pct: Object.fromEntries(KINDS.map((k) => [k, pctX100[k] / 100])),
     betMinCents: CONFIG.limits.betMinCents,
     betMaxCents: CONFIG.limits.betMaxCents,
+    top: (await Rounds.topWins(db, { days: 7, limit: 10 })).map((r) => ({ ...r, name: publicName(r.name) })),
   };
+}
+
+/** Nome no ranking publico: primeiro nome + inicial do sobrenome ("Ana S."). */
+export function publicName(full) {
+  const parts = String(full || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'Jogador';
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.` : parts[0];
 }
 
 export async function active(userId) {

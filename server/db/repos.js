@@ -108,6 +108,18 @@ export const Rounds = {
       [id, kind, multX100],
     ))[0]);
   },
+  /** Maiores lucros recentes (ranking publico): so rodadas sacadas com lucro. */
+  async topWins(q, { days = 7, limit = 10 } = {}) {
+    const rows = await q.query(
+      `SELECT u.name, r.map, r.bet_cents, r.prize_cents, r.closed_at
+         FROM rounds r JOIN users u ON u.id = r.user_id
+        WHERE r.state = 'cashed' AND r.prize_cents > r.bet_cents
+          AND r.closed_at > now() - make_interval(days => $1)
+        ORDER BY (r.prize_cents - r.bet_cents) DESC, r.closed_at DESC LIMIT $2`,
+      [days, limit],
+    );
+    return rows.map((r) => ({ name: r.name, map: r.map, betCents: Number(r.bet_cents), prizeCents: Number(r.prize_cents), at: ms(r.closed_at) }));
+  },
   /** Historico com dados de verificacao. server_seed so sai se ja revelada. */
   async history(q, userId, limit = 20) {
     const rows = await q.query(

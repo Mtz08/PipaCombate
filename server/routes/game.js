@@ -6,7 +6,7 @@ import * as Game from '../domain/game.js';
 export const gameRouter = Router();
 gameRouter.use(requireAuth); // todo o jogo exige login
 
-gameRouter.get('/lobby', (_req, res) => res.json(Game.lobby()));
+gameRouter.get('/lobby', wrap(async (_req, res) => res.json(await Game.lobby())));
 
 // round em andamento (retomar apos recarregar a pagina)
 gameRouter.get('/active', wrap(async (req, res) => res.json(await Game.active(req.user.id))));

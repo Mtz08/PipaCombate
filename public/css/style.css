@@ -443,3 +443,11 @@ body.pixel .tab{font-size:10px}
 .ind-st small{font-size:10.5px;font-weight:800;color:var(--mut)}
 .ind-saque{display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.18);border:3px solid var(--ol);border-radius:16px;padding:12px}
 .ind-saque input{width:100%;font-size:15px;font-weight:800;padding:11px 13px;border-radius:12px;background:#fff;color:var(--ol);border:3px solid var(--ol);box-shadow:inset 0 3px 0 rgba(0,0,0,.12);outline:none}
+/* sorteio verificável */
+.rlist li.tap{cursor:pointer}
+.fair-btn{align-self:center;margin-top:8px}
+.fair-kv{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;text-align:left}
+.fair-kv li{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;border-bottom:1px dashed rgba(255,255,255,.12);padding-bottom:4px}
+.fair-kv li span{color:var(--mut)}
+.fair-kv li b{text-align:right;word-break:break-all}
+.fair-kv .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}

@@ -69,10 +69,13 @@ function toCfg(lobby) {
 
 function toHistory(r) {
   return {
-    id: r.id, map: r.map, cuts: r.cuts, stake: r.betCents, win: r.prizeCents || 0, pct: pctOf(r.multiplier),
-    status: r.state === 'cashed' ? 'won' : 'lost', reason: r.endReason, wind: r.wind,
+    id: r.id, map: r.map, cuts: r.cuts, counts: r.counts || {}, stake: r.betCents, win: r.prizeCents || 0, pct: pctOf(r.multiplier),
+    status: r.state === 'cashed' ? 'won' : 'lost', reason: r.endReason, wind: r.wind, at: r.createdAt,
+    // dados para verificar o sorteio (server_seed so vem depois de revelada)
+    nonce: r.nonce, clientSeed: r.clientSeed, serverSeedHash: r.serverSeedHash, serverSeed: r.serverSeed,
   };
 }
+const toTop = (t) => ({ username: t.name, map: t.map, stake: t.betCents, win: t.prizeCents, at: t.at });
 
 const LEDGER_SHOWN = ['deposit', 'withdraw', 'withdraw_reversal', 'bonus', 'adjust', 'commission'];
 
@@ -88,7 +91,7 @@ export const Api = {
   async lobby() {
     const [l, me, h] = await Promise.all([call('game/lobby'), call('auth/me'), call('game/history').catch(() => ({ rounds: [] }))]);
     const s = fromSession(me);
-    return { balance: s.balance, user: s.user, cfg: toCfg(l), history: (h.rounds || []).map(toHistory), top: l.top || [], canRefill: false };
+    return { balance: s.balance, user: s.user, cfg: toCfg(l), history: (h.rounds || []).map(toHistory), top: (l.top || []).map(toTop), canRefill: false };
   },
   active: () => call('game/active'),
   async start(stake, map) {
@@ -110,6 +113,8 @@ export const Api = {
   },
   history: () => call('game/history'),
   fair: () => call('fair'),
+  rotateSeed: () => post('fair/rotate'),
+  setClientSeed: (clientSeed) => post('fair/client-seed', { clientSeed }),
 
   /* ---- carteira ---- */
   async wallet() {

@@ -6,7 +6,7 @@ import { db } from '../db/index.js';
 import { Rounds } from '../db/repos.js';
 import { CONFIG } from '../config.js';
 import { windPoint } from './fairness.js';
-import { start, cut, cashout, lose } from './game.js';
+import { start, cut, cashout, lose, lobby, publicName } from './game.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 CONFIG.game.minCutIntervalMs = 0; // testes cortam em sequencia
@@ -82,4 +82,25 @@ test('cashout duplicado concorrente paga uma unica vez', async () => {
   const res = await Promise.allSettled([cashout(u.id, round.id), cashout(u.id, round.id)]);
   assert.equal(res.filter((r) => r.status === 'fulfilled').length, 1);
   assert.equal(await balanceOf(u.id), before + 1100);
+});
+
+test('ranking: so saques com lucro, maior lucro primeiro e nome abreviado', async () => {
+  const u = await makeUser('1188880099', 100000);
+  let lucro = 0;
+  while (!lucro) {
+    const { round } = await start(u.id, { betCents: 1000 });
+    const r = await cut(u.id, round.id, { kind: 'chefe' });
+    if (r.wind) continue;
+    lucro = (await cashout(u.id, round.id)).prizeCents - 1000;
+  }
+  const { top } = await lobby();
+  assert.ok(top.length >= 1);
+  for (let i = 1; i < top.length; i++) {
+    assert.ok(top[i - 1].prizeCents - top[i - 1].betCents >= top[i].prizeCents - top[i].betCents);
+  }
+  assert.ok(top.every((t) => t.prizeCents > t.betCents));
+  assert.ok(top.some((t) => t.prizeCents - t.betCents === lucro));
+  assert.equal(publicName('Ana Maria Souza'), 'Ana S.');
+  assert.equal(publicName('Caio'), 'Caio');
+  assert.equal(publicName('  '), 'Jogador');
 });

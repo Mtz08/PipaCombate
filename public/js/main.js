@@ -8,6 +8,7 @@ import { P, save as savePrefs, rerollKid, skinById, mapById } from './store.js?v
 import { Sound } from './audio.js?v=d21';
 import * as Art from './art.js?v=d21';
 import { Api, Auth } from './api.js?v=d21';
+import { windPoint } from './game/fair.js';
 
 /* =========================================================
    UTIL
@@ -1823,13 +1824,76 @@ function renderLists() {
   if (!acct) return;
   const ic = id => (MAPS.find(m => m.id === id) || MAPS[0]).ic;
   const hist = acct.history || [];
-  $('#histList').innerHTML = hist.length ? hist.map(h => {
+  $('#histList').innerHTML = hist.length ? hist.map((h, i) => {
     const won = h.status === 'won';
-    return `<li class="${won ? 'w' : 'l'}"><span>${ic(h.map)} ✂️ ${h.cuts} · +${h.pct}%</span><span class="amt">${won ? '+' + money(h.win - h.stake) : h.status === 'invalid' ? 'anulada' : '−' + money(h.stake)}</span></li>`;
+    const fim = h.reason === 'wind' ? ' · 🌪️' : '';
+    return `<li class="${won ? 'w' : 'l'} tap" data-i="${i}"><span>${ic(h.map)} ✂️ ${h.cuts} · +${h.pct}%${fim}</span><span class="amt">${won ? '+' + money(h.win - h.stake) : '−' + money(h.stake)} ›</span></li>`;
   }).join('') : '<li class="empty">Nenhuma rodada ainda. Bora voar!</li>';
+  $$('#histList li[data-i]').forEach(li => li.onclick = () => { Sound.tap(); showRoundCheck(hist[+li.dataset.i]); });
   const top = acct.top || [];
   $('#topList').innerHTML = top.length ? top.map((t, i) => `<li><span><i class="pos">${i + 1}</i> ${esc(t.username)} ${ic(t.map)}</span><span class="amt">+${money(t.win - t.stake)} <small>${(t.win / t.stake).toFixed(1)}x</small></span></li>`).join('')
     : '<li class="empty">Ninguém sacou essa semana ainda.</li>';
+}
+
+/* ---------- sorteio verificável (provably fair) ----------
+   O ponto em que o vento vira é sorteado antes da rodada com HMAC(server_seed,
+   "client_seed:nonce"). O hash da server_seed é mostrado antes; ao trocar a
+   seed ela é revelada e qualquer um recalcula o vento aqui, no navegador. */
+const fmtX = x => (x == null ? '—' : x.toFixed(2).replace('.', ',') + 'x');
+const short = s => (s ? esc(s.slice(0, 10)) + '…' + esc(s.slice(-6)) : '—');
+const FIM = { cashed: 'Sacou', wind: 'O vento virou', cut: 'Pipa cortada', forfeit: 'Desistiu', timeout: 'Encerrada por tempo' };
+function showRoundCheck(h) {
+  const won = h.status === 'won';
+  openModal(`<div class="ribbon ${won ? 'green' : 'red'}">RODADA</div>
+    <ul class="fair-kv">
+      <li><span>Resultado</span><b>${esc(FIM[h.reason] || (won ? 'Sacou' : 'Perdeu'))}</b></li>
+      <li><span>Aposta</span><b>${money(h.stake)}</b></li>
+      <li><span>Cortes</span><b>${h.cuts} · +${h.pct}%</b></li>
+      <li><span>${won ? 'Recebeu' : 'Perdeu'}</span><b>${money(won ? h.win : h.stake)}</b></li>
+      <li><span>Vento virava em</span><b>${fmtX(h.wind)}</b></li>
+      <li><span>Nonce</span><b>${esc(h.nonce)}</b></li>
+      <li><span>Client seed</span><b>${esc(h.clientSeed || '—')}</b></li>
+      <li><span>Hash da server seed</span><b class="mono">${short(h.serverSeedHash)}</b></li>
+      <li><span>Server seed</span><b class="mono">${h.serverSeed ? short(h.serverSeed) : 'ainda secreta'}</b></li>
+    </ul>
+    <p id="fairOut">${h.serverSeed ? 'Toque em verificar para recalcular o vento aqui no seu aparelho.' : 'A server seed desta rodada ainda está em uso. Revele (troca de seed) para poder verificar.'}</p>
+    <div class="row">${h.serverSeed ? '<button class="btn btn-play" id="fairGo"><span>VERIFICAR</span></button>' : '<button class="btn btn-2" id="fairPanel">REVELAR SEED</button>'}</div>`);
+  if ($('#fairPanel')) $('#fairPanel').onclick = () => { closeModal(); showFairPanel(); };
+  if ($('#fairGo')) $('#fairGo').onclick = async () => {
+    const out = $('#fairOut');
+    try {
+      const c = acct.cfg, r = await windPoint({ serverSeed: h.serverSeed, clientSeed: h.clientSeed, nonce: h.nonce, rtpBps: Math.round(c.rtp * 100), maxMultX100: Math.round(c.cap * 100) });
+      const hashOk = r.serverSeedHash === h.serverSeedHash, windOk = Math.abs(r.windX100 / 100 - h.wind) < 1e-9;
+      out.innerHTML = hashOk && windOk
+        ? `✅ Confere: o hash bate e o vento recalculado deu <b>${fmtX(r.windX100 / 100)}</b>.`
+        : `⚠️ Não confere: ${hashOk ? '' : 'o hash não bate. '}${windOk ? '' : `vento recalculado ${fmtX(r.windX100 / 100)}.`}`;
+      Sound.pop();
+    } catch (e) { out.textContent = 'Seu navegador não conseguiu calcular (precisa de HTTPS ou localhost).'; }
+  };
+}
+async function showFairPanel() {
+  let st;
+  try { st = await Api.fair(); } catch (e) { return apiError(e); }
+  const prev = st.previous;
+  openModal(`<div class="ribbon">SORTEIO VERIFICÁVEL</div>
+    <p>O vento de cada rodada é sorteado com a sua <b>client seed</b> e uma <b>server seed</b> secreta, cujo hash você vê antes de jogar.</p>
+    <ul class="fair-kv">
+      <li><span>Hash da server seed atual</span><b class="mono">${short(st.active.serverSeedHash)}</b></li>
+      <li><span>Sua client seed</span><b>${esc(st.active.clientSeed)}</b></li>
+      <li><span>Próximo nonce</span><b>${esc(st.active.nextNonce)}</b></li>
+      ${prev ? `<li><span>Última seed revelada</span><b class="mono">${short(prev.serverSeed)}</b></li>` : ''}
+    </ul>
+    <input id="fairSeed" class="num-inp" maxlength="64" placeholder="nova client seed (opcional)">
+    <p id="fairMsg"></p>
+    <div class="row"><button class="btn btn-2" id="fairRotate">REVELAR E TROCAR</button></div>`);
+  $('#fairRotate').onclick = async () => {
+    const v = $('#fairSeed').value.trim();
+    try {
+      if (v) await Api.setClientSeed(v); else await Api.rotateSeed();
+      Sound.cheer(.6); toast('🔓 Seed revelada! Suas rodadas já podem ser verificadas.', 'gold');
+      closeModal(); await refreshLobby(); renderLists();
+    } catch (e) { $('#fairMsg').textContent = e.message; Sound.deny(); }
+  };
 }
 function renderHow() {
   const g = $('#rivals');
@@ -1934,6 +1998,7 @@ $('#charPrev').addEventListener('click', () => { charPrevDance = 0; Sound.boing(
 $('#mapTag').onclick = () => { Sound.tap(); $('#secMaps').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 $('#stakeMinus').onclick = () => { Sound.pop(); if (acct) setStake(P.stake - acct.cfg.stake_min); };
 $('#stakePlus').onclick = () => { Sound.pop(); if (acct) setStake(P.stake + acct.cfg.stake_min); };
+$('#btnFair').onclick = () => { Sound.click(); showFairPanel(); };
 $$('#histTabs .tab').forEach(b => b.onclick = () => {
   Sound.tap();
   $$('#histTabs .tab').forEach(x => x.classList.toggle('on', x === b));

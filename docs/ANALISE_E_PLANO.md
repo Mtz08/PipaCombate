@@ -167,7 +167,9 @@ Portar o motor antigo para `public/js/combat/`, modularizado, **sem** a parte de
 - Modo **treino** totalmente offline.
 - Integração com o servidor: cada corte é enviado e validado pelo servidor ("vento vira"). O cliente nunca define o pagamento.
 
-### Fase 3: Lobby e meta-jogo
+### Fase 3: Lobby e meta-jogo ✅ concluída em 27/10/2026
+Feito: ranking "Maiores ganhos" (7 dias, só saques com lucro, nome abreviado "Ana S."), vindo no `game/lobby`; histórico clicável com o detalhe da rodada (resultado, vento, nonce, seeds) e botão VERIFICAR que recalcula o vento no navegador (`public/js/game/fair.js`); painel "Sorteio verificável" para revelar/trocar a seed. A recuperação de rodada pendente já vinha do front antigo. 44/44 testes.
+
 - Seleção de mapa e pipa, seletor de aposta com os limites do servidor e a tabela de pagamento.
 - Histórico de rodadas com o link "verificar justiça" (seed revelada).
 - Ranking e tela "como jogar".
