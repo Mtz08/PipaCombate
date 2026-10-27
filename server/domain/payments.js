@@ -80,14 +80,37 @@ export async function confirmDeposit({ providerRef, amountCents }) {
       return { charge: await Charges.setStatus(t, charge.id, 'review'), review: true };
     }
     const first = !(await Charges.hasPaid(t, charge.userId));
-    const balanceCents = await applyCredit(t, user, charge.amountCents, 'deposit', { chargeId: charge.id });
+    // zerou a banca: o rollover que sobrou de depositos/bonus anteriores nao fica pendurado
+    if (user.balanceCents < 100) await t.query('UPDATE users SET wager_required_cents = 0 WHERE id = $1', [user.id]);
+    let balanceCents = await applyCredit(t, user, charge.amountCents, 'deposit', { chargeId: charge.id });
     // rollover: o deposito precisa ser apostado (x %) antes de poder sacar
     const { rolloverPct } = await getSetting('limites', t);
-    const wager = Math.floor((charge.amountCents * rolloverPct) / 100);
+    let wager = Math.floor((charge.amountCents * rolloverPct) / 100);
+    // bonus de 1o deposito (se ligado no painel): entra no saldo e soma bonus x rolloverX ao rollover
+    const bonus = first ? await bonusFor(t, charge.amountCents) : null;
+    if (bonus) {
+      balanceCents = await applyCredit(t, user, bonus.cents, 'bonus', { chargeId: charge.id, motivo: 'primeiro deposito', rolloverX: bonus.rolloverX });
+      wager += bonus.cents * bonus.rolloverX;
+    }
     if (wager > 0) await t.query('UPDATE users SET wager_required_cents = wager_required_cents + $2 WHERE id = $1', [user.id, wager]);
     await Affiliates.onDeposit(t, user, { amountCents: charge.amountCents, chargeId: charge.id, first });
-    return { charge: await Charges.setStatus(t, charge.id, 'paid'), balanceCents };
+    return { charge: await Charges.setStatus(t, charge.id, 'paid'), balanceCents, bonusCents: bonus?.cents || 0 };
   });
+}
+
+/** Valor do bonus de 1o deposito para este deposito, ou null (desligado / abaixo do minimo). */
+async function bonusFor(t, amountCents) {
+  const b = await getSetting('bonus', t);
+  if (!b.ativo || amountCents < b.minDepositoCents) return null;
+  const cents = Math.min(Math.floor((amountCents * b.pct) / 100), b.maxCents);
+  return cents > 0 ? { cents, rolloverX: b.rolloverX } : null;
+}
+
+/** Oferta mostrada na tela de deposito (so para quem ainda nao depositou). */
+export async function bonusOffer(userId) {
+  const b = await getSetting('bonus');
+  if (!b.ativo || (await Charges.hasPaid(db, userId))) return null;
+  return { pct: b.pct, maxCents: b.maxCents, minDepositoCents: b.minDepositoCents, rolloverX: b.rolloverX };
 }
 
 /**
@@ -101,13 +124,15 @@ export async function refundDeposit({ providerRef, amountCents }) {
     const charge = await Charges.getByRef(t, providerRef, { forUpdate: true });
     if (charge.status !== 'paid') return { charge, duplicate: charge.status === 'refunded' };
     const valor = Math.min(Number(amountCents) || charge.amountCents, charge.amountCents);
-    const debit = Math.min(valor, user.balanceCents);
+    const [bon] = await t.query("SELECT COALESCE(SUM(delta_cents), 0) AS s FROM ledger WHERE user_id = $1 AND type = 'bonus' AND meta->>'chargeId' = $2", [user.id, charge.id]);
+    const devolver = valor + Number(bon.s); // deposito devolvido + bonus que ele gerou
+    const debit = Math.min(devolver, user.balanceCents);
     if (debit > 0) await applyDebit(t, user, debit, 'chargeback', { chargeId: charge.id, devolvido: valor });
     await Affiliates.reverseCharge(t, charge.id);
     await t.query('UPDATE users SET blocked_at = now(), blocked_reason = $2 WHERE id = $1 AND blocked_at IS NULL',
       [user.id, `Devolucao (MED) do deposito de R$ ${reais(valor)}`]);
-    await audit(t, { userId: user.id, action: 'deposit_refunded', meta: { chargeId: charge.id, valor, debitado: debit, faltou: valor - debit } });
-    return { charge: await Charges.setStatus(t, charge.id, 'refunded'), debitado: debit, faltou: valor - debit };
+    await audit(t, { userId: user.id, action: 'deposit_refunded', meta: { chargeId: charge.id, valor, bonus: Number(bon.s), debitado: debit, faltou: devolver - debit } });
+    return { charge: await Charges.setStatus(t, charge.id, 'refunded'), debitado: debit, faltou: devolver - debit };
   });
 }
 

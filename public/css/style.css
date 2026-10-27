@@ -469,3 +469,11 @@ body.pixel .tab{font-size:10px}
 .cookie-bar button.ok{background:#22c55e;color:#fff}
 /* popup do painel */
 .pop-img{max-width:100%;max-height:45vh;border-radius:14px;border:3px solid var(--ol);align-self:center}
+/* carteira: formulario de deposito em coluna com espaco e botoes rapidos em grade */
+#wDepForm{display:flex;flex-direction:column;gap:12px}
+#wDepForm>.btn{margin-top:4px}
+#wDepChips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+#wDepChips .chip{width:100%;padding:9px 6px;text-align:center}
+#wDepChips .chip.on{outline:3px solid #fff;outline-offset:1px}
+#wDepMin{margin-top:2px}
+.bonus-banner{background:linear-gradient(90deg,#16a34a,#22c55e);color:#fff;border:3px solid var(--ol);border-radius:14px;padding:9px 12px;font-weight:900;font-size:13px;line-height:1.35;box-shadow:0 3px 0 var(--ol)}

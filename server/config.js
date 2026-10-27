@@ -58,21 +58,21 @@ export const CONFIG = {
     site_nome: 'Pipa Combate',
     ambiente: env.NODE_ENV || 'development',
     pagamento: (env.PAYMENTS_PROVIDER || 'mock').toUpperCase(),
-    deposito_valores_rapidos: [20, 30, 40, 50, 100, 200],
+    deposito_valores_rapidos: [10, 20, 30, 50, 100, 200],
     entrada_valores: [5, 10, 20, 30, 50, 100],
     fin: {
-      deposito_minimo: 25,
+      deposito_minimo: 10,
       deposito_maximo: 10000,
-      saque_minimo: 100,
+      saque_minimo: 30,
       saque_maximo: 5000,
     },
   },
 
   // Limites financeiros em CENTAVOS (espelham o bloco publico acima).
   limits: {
-    depositMinCents: 2500,
+    depositMinCents: 1000,
     depositMaxCents: 1000000,
-    withdrawMinCents: 10000,
+    withdrawMinCents: 3000,
     withdrawMaxCents: 500000,
     // Saques ate este valor sao enviados direto ao PSP; acima, aguardam aprovacao
     // no admin. 0 = todo saque passa por aprovacao.
@@ -84,7 +84,7 @@ export const CONFIG = {
   // Parametros matematicos do jogo. RTP (retorno ao jogador) no padrao de
   // mercado (95-97%). Ver domain/game.js para a derivacao do multiplicador.
   game: {
-    rtpBps: 9600,          // 96,00%: retorno esperado de QUALQUER estrategia de saque
+    rtpBps: 9000,          // 90,00%: retorno esperado de QUALQUER estrategia de saque (margem da casa 10%)
     maxMultX100: 5000,     // teto absoluto 50,00x
     minCutIntervalMs: 250, // cortes mais rapidos que isso sao recusados (anti-automacao)
     // somado ao multiplicador a cada corte, por tipo (centesimos: 10 = +0,10x)

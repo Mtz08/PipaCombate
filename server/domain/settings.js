@@ -114,6 +114,24 @@ export const SCHEMAS = {
     },
   },
 
+  // Bonus de primeiro deposito. Nasce DESLIGADO. O bonus entra no saldo e soma
+  // ao rollover (bonus x rolloverX): so da para sacar depois de apostar isso.
+  // Com RTP r, o custo esperado de cumprir o rollover e rolloverX x (1 - r) do
+  // bonus: com 90% e 10x, o bonus "se paga" em media antes de virar saque.
+  bonus: {
+    padrao: () => ({ ativo: false, pct: 100, maxCents: 10000, minDepositoCents: 1000, rolloverX: 10 }),
+    validar(v) {
+      const out = {
+        ativo: v.ativo === true,
+        pct: int(v.pct, 1, 300, 'percentual do bonus'),
+        maxCents: int(v.maxCents, 100, 10000000, 'teto do bonus'),
+        minDepositoCents: int(v.minDepositoCents, 100, 10000000, 'deposito minimo para ganhar o bonus'),
+        rolloverX: int(v.rolloverX, 1, 100, 'rollover do bonus (x)'),
+      };
+      return out;
+    },
+  },
+
   // Pixels de anuncio. Sao publicos por natureza (vao para o navegador), so
   // carregam depois do consentimento de cookies do visitante.
   marketing: {
@@ -133,9 +151,9 @@ export const SCHEMAS = {
   publico: {
     padrao: () => ({
       siteNome: 'Pipa Combate',
-      depositoRapidoCents: [2000, 3000, 4000, 5000, 10000, 20000],
-      depositoRotulos: { 2000: 'MÍNIMO', 3000: 'BOM', 4000: 'ÓTIMO', 5000: 'EXCELENTE', 10000: 'TOP', 20000: 'TOP' },
-      depositoCores: { 2000: '#0ce100', 3000: '#f59e0b', 4000: '#ef5d00', 5000: '#f20000', 10000: '#52005f', 20000: '#450d59' },
+      depositoRapidoCents: [1000, 2000, 3000, 5000, 10000, 20000],
+      depositoRotulos: { 1000: 'MÍNIMO', 2000: 'BOM', 3000: 'ÓTIMO', 5000: 'EXCELENTE', 10000: 'TOP', 20000: 'VIP' },
+      depositoCores: { 1000: '#16a34a', 2000: '#f59e0b', 3000: '#ef5d00', 5000: '#e11d48', 10000: '#7c3aed', 20000: '#450d59' },
       suporte: [], // [{ nome, url }]
       popup: { ativo: false, titulo: '', mensagem: '', imagemUrl: '', botaoTexto: '', botaoAcao: 'fechar', botaoUrl: '', frequencia: 'sessao' },
     }),

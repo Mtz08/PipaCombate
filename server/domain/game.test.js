@@ -11,13 +11,14 @@ import { start, cut, cashout, lose, lobby, publicName } from './game.js';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 CONFIG.game.minCutIntervalMs = 0; // testes cortam em sequencia
 
-test('RTP teorico: sacar em m tem retorno P(vento > m) * m <= 96%', () => {
+test('RTP teorico: sacar em m tem retorno P(vento > m) * m ~= RTP configurado', () => {
   const N = 50000;
   for (const m of [110, 150, 200, 500]) {
     let ok = 0;
     for (let i = 0; i < N; i++) if (windPoint('a'.repeat(64), 'rtp', i) > m) ok++;
     const rtp = (ok / N) * (m / 100);
-    assert.ok(rtp < 0.985 && rtp > 0.93, `m=${m} rtp=${rtp}`);
+    const alvo = CONFIG.game.rtpBps / 10000;
+    assert.ok(Math.abs(rtp - alvo) < 0.03, `m=${m} rtp=${rtp} alvo=${alvo}`);
   }
 });
 

@@ -3,7 +3,7 @@ import { wrap } from '../middleware/error.js';
 import { requireAuth } from '../middleware/session.js';
 import { walletLimiter } from '../middleware/rateLimit.js';
 import { snapshot } from '../domain/wallet.js';
-import { createDeposit, getDeposit, requestWithdrawal } from '../domain/payments.js';
+import { createDeposit, getDeposit, requestWithdrawal, bonusOffer } from '../domain/payments.js';
 import { CONFIG } from '../config.js';
 import { getSetting } from '../domain/settings.js';
 import * as Responsible from '../domain/responsible.js';
@@ -20,11 +20,12 @@ walletRouter.use((req, res, next) => (req.method === 'GET' ? next() : walletLimi
 
 walletRouter.get('/', wrap(async (req, res) => res.json(await snapshot(req.user.id))));
 
-walletRouter.get('/deposit-info', wrap(async (_req, res) => {
-  const [lim, pub] = await Promise.all([getSetting('limites'), getSetting('publico')]);
+walletRouter.get('/deposit-info', wrap(async (req, res) => {
+  const [lim, pub, bonus] = await Promise.all([getSetting('limites'), getSetting('publico'), bonusOffer(req.user.id)]);
   res.json({
     minCents: lim.depositMinCents, maxCents: lim.depositMaxCents, metodo: 'PIX', provider: CONFIG.payments.provider,
     chipsCents: pub.depositoRapidoCents, rotulos: pub.depositoRotulos, cores: pub.depositoCores,
+    bonus, // oferta de 1o deposito (null se desligada ou ja depositou)
   });
 }));
 

@@ -6,14 +6,15 @@ import { Rounds } from '../db/repos.js';
 import { makeUser } from '../db/testing.js';
 import { windPoint, sha256, status, rotate, setClientSeed, verify } from './fairness.js';
 import { start, lose, history } from './game.js';
+import { CONFIG } from '../config.js';
 
 const SEED = 'a'.repeat(64);
 
-test('vento e deterministico, >= 0,96x e <= teto de 50x', () => {
+test('vento e deterministico, >= RTP (ex.: 0,90x) e <= teto de 50x', () => {
   assert.equal(windPoint(SEED, 'abc', 0), windPoint(SEED, 'abc', 0));
   for (let i = 0; i < 5000; i++) {
     const w = windPoint(SEED, 'abc', i);
-    assert.ok(w >= 96 && w <= 5000);
+    assert.ok(w >= CONFIG.game.rtpBps / 100 && w <= CONFIG.game.maxMultX100);
   }
 });
 

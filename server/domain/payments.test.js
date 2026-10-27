@@ -159,3 +159,46 @@ test('webhook: aceita assinatura correta e rejeita adulterada', () => {
   assert.ok(mock.parseWebhook(body, { 'x-signature': mock.sign(body) }));
   assert.equal(mock.parseWebhook(body, { 'x-signature': 'f'.repeat(64) }), null);
 });
+
+test('bonus de 1o deposito: desligado por padrao; ligado credita, soma rollover e so vale uma vez', async () => {
+  const { setSetting } = await import('./settings.js');
+  const semBonus = await makeUser('1177770012');
+  await createDeposit(semBonus.id, 5000);
+  assert.equal(await balanceOf(semBonus.id), 5000); // desligado: nada de bonus
+
+  await setSetting('bonus', { ativo: true, pct: 100, maxCents: 10000, minDepositoCents: 1000, rolloverX: 10 }, null);
+  try {
+    const u = await makeUser('1177770013');
+    await createDeposit(u.id, 5000);
+    assert.equal(await balanceOf(u.id), 10000); // R$ 50 + R$ 50 de bonus
+    // rollover = deposito (100%) + bonus x 10
+    assert.equal((await Users.getById(db, u.id)).wagerRequiredCents, 5000 + 50000);
+    await createDeposit(u.id, 5000);
+    assert.equal(await balanceOf(u.id), 15000); // 2o deposito: sem bonus
+
+    const teto = await makeUser('1177770014');
+    await createDeposit(teto.id, 50000);
+    assert.equal(await balanceOf(teto.id), 60000); // bonus limitado a R$ 100
+
+    const pouco = await makeUser('1177770015');
+    await createDeposit(pouco.id, 500 + 500); // R$ 10: no limite minimo do bonus
+    assert.equal(await balanceOf(pouco.id), 2000);
+
+    // devolucao (MED) leva o deposito e o bonus que ele gerou
+    const med = await makeUser('1177770016');
+    const c = await createDeposit(med.id, 5000);
+    const r = await refundDeposit({ providerRef: (await Charges.get(db, c.id)).providerRef, amountCents: 5000 });
+    assert.equal(r.debitado, 10000);
+    assert.equal(await balanceOf(med.id), 0);
+  } finally {
+    await setSetting('bonus', null, null);
+  }
+});
+
+test('zerou a banca: rollover antigo nao fica pendurado no proximo deposito', async () => {
+  const u = await makeUser('1177770017');
+  await createDeposit(u.id, 5000);
+  await db.query('UPDATE users SET balance_cents = 50 WHERE id = $1', [u.id]); // (perdeu quase tudo)
+  await createDeposit(u.id, 2000);
+  assert.equal((await Users.getById(db, u.id)).wagerRequiredCents, 2000); // so o deposito novo
+});

@@ -59,6 +59,9 @@ async function boot() {
       <p class="hint">Vale para as próximas rodadas. Cada rodada guarda o RTP e o teto com que foi sorteada, então a verificação das antigas continua batendo.</p>
       <form id="fJogo" class="aff-form"></form></section>
     <section class="card"><h2>Limites de depósito e saque</h2><form id="fLim" class="aff-form"></form></section>
+    <section class="card"><h2>Bônus de primeiro depósito</h2>
+      <p class="hint">Entra no saldo junto com o 1º depósito e soma (bônus × rollover) ao valor que o jogador precisa apostar antes de sacar. Com RTP de 90% e rollover 10x, o custo esperado do rollover é igual ao bônus. Confirme o formato com o jurídico antes de ligar.</p>
+      <form id="fBonus" class="aff-form"></form></section>
     <section class="card"><h2>Textos e botões públicos</h2><form id="fPub" class="aff-form"></form></section>
     <section class="card"><h2>Pixels de anúncio</h2>
       <p class="hint">Só carregam para quem aceitar os cookies de marketing. Eventos: cadastro (CompleteRegistration), início de depósito (InitiateCheckout) e depósito confirmado (Purchase / CompletePayment).</p>
@@ -87,7 +90,7 @@ async function boot() {
   $('#btnExpire').onclick = async () => { const r = await api('expire-rounds', {}); alert(`${r.expired} round(s) encerrado(s).`); stats(); };
   show2faSetup(); stats(); search(); audit(); withdrawals(); affiliates(); suspects();
   settingsForm('jogo', '#fJogo', JOGO); settingsForm('limites', '#fLim', LIMITES); publicoForm();
-  settingsForm('marketing', '#fMkt', MARKETING);
+  settingsForm('marketing', '#fMkt', MARKETING); settingsForm('bonus', '#fBonus', BONUS);
 }
 
 /* ---------- formularios de configuracao (settings) ----------
@@ -104,6 +107,11 @@ const LIMITES = [
   ['withdrawMinCents', 'Saque mínimo R$', 'reais'], ['withdrawMaxCents', 'Saque máximo R$', 'reais'],
   ['withdrawAutoMaxCents', 'Saque automático até R$ (0 = todos passam por aprovação)', 'reais'],
   ['rolloverPct', 'Rollover: % do depósito a apostar antes de sacar (0 desliga)', 'pctx'],
+];
+const BONUS = [
+  ['ativo', 'Bônus ligado (sim/não)', 'bool'], ['pct', 'Bônus em % do 1º depósito', 'pctx'],
+  ['maxCents', 'Bônus máximo R$', 'reais'], ['minDepositoCents', 'Depósito mínimo para ganhar R$', 'reais'],
+  ['rolloverX', 'Rollover do bônus (quantas vezes apostar)', 'pctx'],
 ];
 const MARKETING = [
   ['metaPixelId', 'Pixel do Meta (ID numérico)', 'txt'], ['tiktokPixelId', 'Pixel do TikTok (ID)', 'txt'],

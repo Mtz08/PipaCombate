@@ -1454,7 +1454,13 @@ function renderWallet() {
       return `<button class="chip big${cor ? ' tinted' : ''}" data-v="${v}"${cor}>🪙 ${money(v)}${info.rotulos[v] ? `<small>${esc(info.rotulos[v])}</small>` : ''}</button>`;
     }).join('');
     paintVars($('#wDepChips'));
-    $$('#wDepChips .chip').forEach(b => b.onclick = () => { Sound.pop(); $('#wDepVal').value = money(+b.dataset.v); });
+    $$('#wDepChips .chip').forEach(b => b.onclick = () => { Sound.pop(); $('#wDepVal').value = money(+b.dataset.v); $$('#wDepChips .chip').forEach(x => x.classList.toggle('on', x === b)); });
+    $('#wDepVal').placeholder = mn ? `Mínimo R$ ${money(mn)}` : 'Digite o valor';
+    // oferta de bonus do 1o deposito (configurada no painel)
+    const bb = $('#wDepBonus'), b = info.bonus;
+    bb.hidden = !b;
+    if (b) bb.textContent = `🎁 1º depósito: ganhe ${b.pct}% de bônus (até R$ ${money(b.maxCents)}) em depósitos a partir de R$ ${money(b.minDepositoCents)}. Para sacar, o bônus precisa ser apostado ${b.rolloverX}x.`;
+    $('#wDepVal').oninput = () => $$('#wDepChips .chip').forEach(x => x.classList.remove('on'));
   }).catch(() => {});
   Api.withdrawInfo().then(info => {
     const mn = info.saqueMinimoCents ?? info.saque_minimo_cents ?? 0;
