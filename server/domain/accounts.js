@@ -56,7 +56,7 @@ export async function register({ name, phone, password, ref, terms, utm }) {
       });
       if (CONFIG.signupBonusCents > 0) await applyCredit(t, user, CONFIG.signupBonusCents, 'bonus');
       return user;
-    }).then(promoteIfAdmin);
+    });
   } catch (err) {
     // cadastro simultaneo com o mesmo telefone: o UNIQUE do banco decide
     if (isUniqueViolation(err, 'phone')) throw domainError('PHONE_TAKEN', 'Telefone ja cadastrado', 409);
@@ -64,23 +64,53 @@ export async function register({ name, phone, password, ref, terms, utm }) {
   }
 }
 
+// Bloqueio progressivo por telefone: a partir de 5 erros seguidos, 15 min,
+// dobrando a cada erro novo (teto 24h). Vale para telefone cadastrado ou nao:
+// a resposta e a mesma, entao nao revela quais numeros tem conta.
+const FREE_FAILS = 5;
+const LOCK_BASE_MS = 15 * 60 * 1000;
+const LOCK_MAX_MS = 24 * 3600 * 1000;
+
+async function assertNotLocked(phone) {
+  const row = (await db.query('SELECT locked_until FROM login_throttle WHERE phone = $1', [phone]))[0];
+  const until = row?.locked_until ? new Date(row.locked_until).getTime() : 0;
+  if (until > Date.now()) {
+    const min = Math.ceil((until - Date.now()) / 60000);
+    throw domainError('LOGIN_LOCKED', `Muitas tentativas erradas. Tente de novo em ${min} min.`, 429);
+  }
+}
+
+async function registerFail(phone) {
+  const r = (await db.query(
+    `INSERT INTO login_throttle (phone, fails, updated_at) VALUES ($1, 1, now())
+     ON CONFLICT (phone) DO UPDATE SET fails = login_throttle.fails + 1, updated_at = now()
+     RETURNING fails`, [phone],
+  ))[0];
+  if (r.fails >= FREE_FAILS) {
+    const ms = Math.min(LOCK_BASE_MS * 2 ** (r.fails - FREE_FAILS), LOCK_MAX_MS);
+    await db.query('UPDATE login_throttle SET locked_until = $2 WHERE phone = $1', [phone, new Date(Date.now() + ms)]);
+  }
+}
+
 /** Login por telefone + senha. Mensagem e tempo iguais para telefone inexistente. */
 export async function login({ phone, password }) {
   let cleanPhone;
   try { cleanPhone = normalizePhone(phone); } catch { cleanPhone = null; }
+  if (cleanPhone) await assertNotLocked(cleanPhone);
   const user = cleanPhone ? await Users.getByPhone(db, cleanPhone) : null;
   const ok = await bcrypt.compare(String(password ?? ''), user?.passwordHash || DUMMY_HASH);
-  if (!user || !ok) throw domainError('BAD_CREDENTIALS', 'Telefone ou senha invalidos', 401);
-  return promoteIfAdmin(user);
+  if (!user || !ok) {
+    if (cleanPhone) await registerFail(cleanPhone);
+    throw domainError('BAD_CREDENTIALS', 'Telefone ou senha invalidos', 401);
+  }
+  await db.query('DELETE FROM login_throttle WHERE phone = $1', [cleanPhone]);
+  return user;
 }
 
-/** Telefones em ADMIN_PHONES viram admin ao entrar (bootstrap sem tela de cadastro de admin). */
-export async function promoteIfAdmin(user) {
-  if (user.role !== 'admin' && CONFIG.adminPhones.includes(user.phone)) {
-    await tx((t) => Users.setRole(t, user.id, 'admin'));
-    user.role = 'admin';
-  }
-  return user;
+/** Confere a senha de quem ja esta logado (reautenticacao antes de sacar). */
+export async function assertPasswordOf(user, password) {
+  const ok = await bcrypt.compare(String(password ?? ''), user.passwordHash);
+  if (!ok) throw domainError('BAD_PASSWORD', 'Senha incorreta', 403);
 }
 
 /** Logout: invalida TODOS os cookies ja emitidos para o usuario. */

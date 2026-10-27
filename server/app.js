@@ -39,15 +39,24 @@ export function createApp() {
         imgSrc: ["'self'", 'data:', 'https:'], // imagem do popup (https) e pixels de imagem
         scriptSrc: ["'self'", 'https://connect.facebook.net', 'https://analytics.tiktok.com', 'https://cdn.utmify.com.br'],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
-        styleSrcAttr: ["'unsafe-inline'"], // style="--c:..." gerado pelo front (so atributos)
+        styleSrcAttr: ["'none'"], // cores dinamicas vao por JS (style.setProperty), nunca style="" no HTML
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        connectSrc: ["'self'", 'https://*.facebook.com', 'https://*.facebook.net', 'https://*.tiktok.com', 'https://*.tiktokw.us', 'https://*.utmify.com.br'],
+        // hosts exatos dos pixels (so carregam com consentimento); nada de curinga
+        connectSrc: ["'self'", 'https://www.facebook.com', 'https://connect.facebook.net', 'https://analytics.tiktok.com', 'https://cdn.utmify.com.br', 'https://api.utmify.com.br'],
         frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        baseUri: ["'self'"],
+        objectSrc: ["'none'"],
+        workerSrc: ["'self'"],
         upgradeInsecureRequests: CONFIG.isProd ? [] : null,
       },
     },
-    hsts: CONFIG.isProd,
+    hsts: CONFIG.isProd ? { maxAge: 63072000, includeSubDomains: true } : false,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
   }));
+  // recursos do navegador que o jogo nao usa ficam desligados
+  app.use((_req, res, next) => { res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'); next(); });
 
   // corpo pequeno: so dados de formulario. rawBody guardado para validar webhooks.
   app.use(express.json({ limit: '32kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));

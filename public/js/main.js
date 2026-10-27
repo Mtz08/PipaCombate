@@ -1099,8 +1099,8 @@ function updHud() {
   } else if (!bb.classList.contains('hidden')) bb.classList.add('hidden');
   let bf = '';
   const ICO = { vento: '💨', ouro: '⭐', escudo: '🛡️' };
-  for (const k in r.buffs) if (r.buffs[k] > 0) bf += `<span style="--c:${POW[k].col}">${ICO[k]} ${Math.ceil(r.buffs[k])}s</span>`;
-  setHtml('#hBuffs', bf);
+  for (const k in r.buffs) if (r.buffs[k] > 0) bf += `<span data-c="${POW[k].col}">${ICO[k]} ${Math.ceil(r.buffs[k])}s</span>`;
+  if (lastHud['#hBuffs'] !== bf) { setHtml('#hBuffs', bf); paintVars($('#hBuffs')); }
   const cd = (r.dashCd / 4).toFixed(2);
   if (lastHud.cd !== cd) { lastHud.cd = cd; const d = $('#btnDash'); d.style.setProperty('--cd', cd); d.classList.toggle('ready', r.dashCd <= 0); }
   const low = p && p.alive ? clamp((.4 - p.hp / p.maxHp) / .4, 0, 1) : 0;
@@ -1113,11 +1113,19 @@ function banner(t, sub) {
   replay(el, 'show');
 }
 function announce(t, cls = '') { const el = $('#announce'); el.textContent = t; el.className = cls; requestAnimationFrame(() => el.classList.add('show')); }
-function toast(html, cls = '') {
+function toast(text, cls = '') { showToast(cls, el => { el.textContent = text; }); }
+/** So para mensagens montadas aqui, com todo dado externo passado por esc(). */
+function toastHtml(html, cls = '') { showToast(cls, el => { el.innerHTML = html; }); }
+function showToast(cls, fill) {
   const el = document.createElement('div');
-  el.className = 'toast ' + cls; el.innerHTML = html;
+  el.className = 'toast ' + cls; fill(el);
   $('#toasts').appendChild(el);
   setTimeout(() => el.remove(), 3400);
+}
+/* cores vindas de data-* viram variaveis CSS via JS (a CSP nao permite style="" no HTML) */
+function paintVars(root) {
+  root.querySelectorAll('[data-c]').forEach(el => el.style.setProperty('--c', el.dataset.c));
+  root.querySelectorAll('[data-chip]').forEach(el => el.style.setProperty('--chip', el.dataset.chip));
 }
 
 /* dicas da primeira partida */
@@ -1442,15 +1450,19 @@ function renderWallet() {
     // botões de depósito rápido configurados no painel (valor, rótulo e cor)
     const chips = (info.chips || [2000, 5000, 10000, 20000, 50000]).filter(v => (!mn || v >= mn) && (!mx || v <= mx));
     $('#wDepChips').innerHTML = chips.map(v => {
-      const cor = /^#[0-9a-f]{6}$/i.test(info.cores[v] || '') ? ` style="--chip:${info.cores[v]}"` : '';
+      const cor = /^#[0-9a-f]{6}$/i.test(info.cores[v] || '') ? ` data-chip="${info.cores[v]}"` : '';
       return `<button class="chip big${cor ? ' tinted' : ''}" data-v="${v}"${cor}>🪙 ${money(v)}${info.rotulos[v] ? `<small>${esc(info.rotulos[v])}</small>` : ''}</button>`;
     }).join('');
+    paintVars($('#wDepChips'));
     $$('#wDepChips .chip').forEach(b => b.onclick = () => { Sound.pop(); $('#wDepVal').value = money(+b.dataset.v); });
   }).catch(() => {});
   Api.withdrawInfo().then(info => {
     const mn = info.saqueMinimoCents ?? info.saque_minimo_cents ?? 0;
     const mx = info.saqueMaximoCents ?? info.saque_maximo_cents ?? 0;
     $('#wSaqMin').textContent = mx ? `mín. ${money(mn)} · máx. ${money(mx)}` : (mn ? `mín. ${money(mn)}` : '');
+    const roll = info.rolloverRestanteCents || 0, rp = $('#wSaqRoll');
+    rp.hidden = !roll;
+    if (roll) rp.textContent = `Para sacar, aposte mais R$ ${money(roll)}: o depósito precisa ser jogado antes do saque.`;
   }).catch(() => {});
 }
 
@@ -1484,8 +1496,8 @@ $('#wDepBtn').onclick = async () => {
     pendingDep = { id: j.id, cents };
     if (j.pixCode) {
       $('#wPixCode').value = j.pixCode;
-      $('#wPixQr').src = j.qrcode || '';
-      $('#wPixQr').style.display = j.qrcode ? '' : 'none';
+      $('#wPixQr').src = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(j.qrcode || '') ? j.qrcode : '';
+      $('#wPixQr').style.display = $('#wPixQr').getAttribute('src') ? '' : 'none';
       $('#wDepForm').classList.add('hidden');
       $('#wDepPix').classList.remove('hidden');
       startDepositPoll();
@@ -1562,7 +1574,8 @@ $('#wSaqBtn').onclick = async () => {
   if (cpf.length !== 11) { err.textContent = 'CPF inválido (11 dígitos).'; err.hidden = false; Sound.deny(); return; }
   btn.disabled = true; btn.classList.add('loading');
   try {
-    const r = await Api.withdraw(cents, pix, cpf);
+    const r = await Api.withdraw(cents, pix, cpf, $('#wSaqPw').value);
+    $('#wSaqPw').value = '';
     const j = await Api.wallet().catch(() => null);
     if (j && typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
     $('#wSaqVal').value = '';
@@ -1620,7 +1633,8 @@ $('#indSaqBtn').onclick = async () => {
   if (cpf.length !== 11) { err.textContent = 'CPF inválido (11 dígitos).'; err.hidden = false; Sound.deny(); return; }
   btn.disabled = true; btn.classList.add('loading');
   try {
-    await Api.withdrawAffiliate(cents, pix, cpf);
+    await Api.withdrawAffiliate(cents, pix, cpf, $('#indSaqPw').value);
+    $('#indSaqPw').value = '';
     $('#indSaqVal').value = '';
     toast('✅ Saque de comissão solicitado!', 'green'); Sound.cheer(1);
     renderIndicacao();
@@ -1633,8 +1647,8 @@ function showBusy(t) { $('#busyTxt').textContent = t; $('#busy').classList.remov
 function hideBusy() { $('#busy').classList.add('hidden'); }
 function setBusyBtn(on) { const b = $('#btnBet'); b.disabled = on; b.classList.toggle('loading', on); }
 function apiError(e) {
-  if (e.status === 401 || e.status === 403) { toast(esc(e.message), 'bad'); logout(true); return; }
-  toast(esc(e.message), 'bad'); Sound.deny();
+  if (e.status === 401) { toast(e.message, 'bad'); logout(true); return; } // so sessao expirada desloga
+  toast(e.message, 'bad'); Sound.deny();
 }
 
 /* =========================================================
@@ -1686,7 +1700,7 @@ function enterLobby(msg) {
   state = 'lobby';
   showScreen('#lobby');
   renderLobby(); refreshLobby();
-  if (msg) toast(msg, 'gold');
+  if (msg) toastHtml(msg, 'gold');
   Sound.music('menu'); Sound.crowdAmb(0);
   if (window.PCConfig) window.PCConfig.then(c => showPopup(c && c.popup)).catch(() => {});
 }
@@ -1969,10 +1983,10 @@ async function renderResponsavel() {
     if (!c) return toast('Digite um valor.', 'bad');
     try { const r = await Api.setDepositLimit(c, $('#rgPer').value); done(r.aplicado === 'agora' ? '✅ Limite aplicado.' : '⏳ O novo limite vale em 24h.'); } catch (e) { toast(esc(e.message), 'bad'); }
   };
-  $('#rgDel').onclick = async () => { try { await Api.setDepositLimit(null); done('⏳ O limite sai em 24h.'); } catch (e) { toast(esc(e.message), 'bad'); } };
+  $('#rgDel').onclick = async () => { try { await Api.setDepositLimit(null); done('⏳ O limite sai em 24h.'); } catch (e) { toast(e.message, 'bad'); } };
   $$('#rgBox [data-p]').forEach(b => b.onclick = async () => {
     if (!confirm(`Pausar o jogo por ${b.dataset.p} dia(s)? Não dá pra desfazer antes do prazo.`)) return;
-    try { await Api.selfExclude(+b.dataset.p); done('⏸️ Jogo pausado. Cuide-se!'); } catch (e) { toast(esc(e.message), 'bad'); }
+    try { await Api.selfExclude(+b.dataset.p); done('⏸️ Jogo pausado. Cuide-se!'); } catch (e) { toast(e.message, 'bad'); }
   });
 }
 function renderSettings() {
@@ -2003,10 +2017,11 @@ function renderChar() {
   body.innerHTML = TABS[charTab].map(([lbl, key, type, list]) => {
     const cur = P.kid[key];
     const opts = type === 'sw'
-      ? `<div class="swatches">${list.map(c => `<button class="sw ${cur === c ? 'on' : ''}" style="--c:${c}" data-k="${key}" data-v="${c}" aria-label="${lbl}"></button>`).join('')}</div>`
+      ? `<div class="swatches">${list.map(c => `<button class="sw ${cur === c ? 'on' : ''}" data-c="${c}" data-k="${key}" data-v="${c}" aria-label="${lbl}"></button>`).join('')}</div>`
       : `<div class="opts-grid">${KID[key].map(([v, n]) => `<button class="opt-tile ${cur === v ? 'on' : ''}" data-k="${key}" data-v="${v}">${n}</button>`).join('')}</div>`;
     return `<div class="c-sec"><h4>${lbl}</h4>${opts}</div>`;
   }).join('') + (charTab === 'roupa' ? `<div class="c-sec"><h4>Número da camisa</h4><input id="kidNum" class="num-inp" inputmode="numeric" maxlength="2" value="${esc(P.kid.num)}"></div>` : '');
+  paintVars(body);
   $$('#charBody [data-k]').forEach(b => b.onclick = () => {
     P.kid[b.dataset.k] = b.dataset.v; savePrefs();
     if (b.dataset.k === 'danca') { charPrevDance = 0; Sound.boing(); } else Sound.pop();

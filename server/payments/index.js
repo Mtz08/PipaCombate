@@ -3,7 +3,9 @@
 // Contrato que todo provider implementa:
 //   createPixCharge({ chargeId, amountCents, expiresAt }) -> { providerRef, copyPaste, qrCodeBase64, expiresAt }
 //   sendPixTransfer({ withdrawalId, amountCents, pixKey, cpf }) -> { providerRef, status: 'paid' | 'processing' }
-//   parseWebhook(rawBody, headers) -> { type, providerRef, amountCents } | null (assinatura invalida)
+//   parseWebhook(rawBody, headers) -> { type, providerRef, amountCents, withdrawalId } | null (assinatura invalida)
+//     type: charge.paid | charge.refunded | transfer.paid | transfer.failed
+//   Erro em sendPixTransfer: definitive = true so para recusa certa do PSP.
 
 import { CONFIG } from '../config.js';
 import * as mock from './mock.js';

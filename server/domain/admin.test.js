@@ -5,12 +5,13 @@ import { createApp } from '../app.js';
 import { CONFIG } from '../config.js';
 import { db } from '../db/index.js';
 import { makeUser, balanceOf } from '../db/testing.js';
-import { start, cut } from './game.js';
+import { start, cut, lose } from './game.js';
 import { expireRounds, adjustBalance } from './admin.js';
+import { codeAt, stepAt } from '../util/totp.js';
 
 const ADMIN = '11900000001';
-CONFIG.adminPhones = [ADMIN];
 CONFIG.game.minCutIntervalMs = 0;
+const promote = (phone) => db.query("UPDATE users SET role = 'admin' WHERE phone = $1", [phone]);
 
 let server, base;
 before(() => new Promise((r) => { server = createApp().listen(0, () => { base = `http://127.0.0.1:${server.address().port}`; r(); }); }));
@@ -27,8 +28,23 @@ test('jogador comum nao enxerga o admin (404)', async () => {
   assert.equal((await c('/api/admin/stats')).status, 404);
 });
 
-test('admin ve numeros, busca jogador e ajusta saldo com motivo (auditado)', async () => {
+test('cadastrar o telefone de um admin NAO da acesso ao admin (so pela linha de comando)', async () => {
+  const c = await session('11900000009');
+  assert.equal((await c('/api/admin/stats')).status, 404);
+});
+
+test('admin ve numeros, busca jogador e ajusta saldo com motivo (auditado e com 2FA)', async () => {
   const c = await session(ADMIN);
+  await promote(ADMIN);
+  // sem 2FA, acao critica e barrada
+  const semOtp = await c('/api/admin/users/00000000-0000-0000-0000-000000000000/adjust', { method: 'POST', body: '{}' });
+  assert.equal((await semOtp.json()).error.code, 'ADMIN_2FA_REQUIRED');
+  const { secret } = await (await c('/api/admin/2fa/setup', { method: 'POST', body: '{}' })).json();
+  assert.equal((await c('/api/admin/2fa/enable', { method: 'POST', body: JSON.stringify({ code: '000000' }) })).status, 403);
+  const code = codeAt(secret, stepAt());
+  assert.equal((await c('/api/admin/2fa/enable', { method: 'POST', body: JSON.stringify({ code }) })).status, 200);
+  // o mesmo codigo nao vale duas vezes
+  assert.equal((await c('/api/admin/2fa/confirm', { method: 'POST', body: JSON.stringify({ code }) })).status, 403);
   const st = await (await c('/api/admin/stats')).json();
   assert.ok(st.users >= 1 && 'ggr' in st.money);
   const u = await makeUser('11900000003', 1000);
@@ -40,11 +56,33 @@ test('admin ve numeros, busca jogador e ajusta saldo com motivo (auditado)', asy
   assert.equal((await ok.json()).balanceCents, 1500);
   const [row] = await db.query("SELECT * FROM audit_log WHERE action = 'admin_adjust' AND user_id = $1", [u.id]);
   assert.equal(row.meta.deltaCents, 500);
+  // nunca na propria conta
+  const me = (await db.query('SELECT id FROM users WHERE phone = $1', [ADMIN]))[0].id;
+  const self = await c(`/api/admin/users/${me}/adjust`, { method: 'POST', body: JSON.stringify({ deltaCents: 500, reason: 'tentativa propria' }) });
+  assert.equal((await self.json()).error.code, 'SELF_ACTION');
+  // janela de 2FA vencida: precisa confirmar de novo
+  await db.query("UPDATE users SET admin_reauth_until = now() - interval '1 minute' WHERE phone = $1", [ADMIN]);
+  const venceu = await c(`/api/admin/users/${u.id}/adjust`, { method: 'POST', body: JSON.stringify({ deltaCents: 1, reason: 'outro teste' }) });
+  assert.equal((await venceu.json()).error.code, 'ADMIN_REAUTH_REQUIRED');
+});
+
+test('login: 5 erros seguidos bloqueiam o telefone (mesmo sem conta), acerto zera', async () => {
+  const post = (body) => fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(body) });
+  await session('11900000010'); // senha-forte-1
+  for (let i = 0; i < 5; i++) assert.equal((await post({ phone: '11900000010', password: 'errada-123' })).status, 401);
+  const travado = await post({ phone: '11900000010', password: 'senha-forte-1' });
+  assert.equal(travado.status, 429);
+  assert.equal((await travado.json()).error.code, 'LOGIN_LOCKED');
+  for (let i = 0; i < 5; i++) await post({ phone: '11900000011', password: 'errada-123' }); // nao existe
+  assert.equal((await post({ phone: '11900000011', password: 'x' })).status, 429); // mesmo comportamento
+  await db.query("UPDATE login_throttle SET locked_until = now() - interval '1 second' WHERE phone = '11900000010'");
+  assert.equal((await post({ phone: '11900000010', password: 'senha-forte-1' })).status, 200);
+  assert.equal((await db.query("SELECT 1 FROM login_throttle WHERE phone = '11900000010'")).length, 0);
 });
 
 test('ajuste nao deixa saldo negativo', async () => {
   const u = await makeUser('11900000004', 100);
-  await assert.rejects(() => adjustBalance({ id: u.id }, u.id, { deltaCents: -500, reason: 'estorno teste' }), (e) => e.code === 'INSUFFICIENT_FUNDS');
+  await assert.rejects(() => adjustBalance({ id: null }, u.id, { deltaCents: -500, reason: 'estorno teste' }), (e) => e.code === 'INSUFFICIENT_FUNDS');
 });
 
 test('login com falha fica na auditoria', async () => {
@@ -53,7 +91,7 @@ test('login com falha fica na auditoria', async () => {
   assert.ok(rows.length >= 1);
 });
 
-test('round abandonado expira: com corte recolhe a favor do jogador; sem corte desiste', async () => {
+test('round abandonado expira sem premio (com ou sem corte)', async () => {
   const a = await makeUser('11900000005', 10000);
   const b = await makeUser('11900000006', 10000);
   let ra;
@@ -62,7 +100,31 @@ test('round abandonado expira: com corte recolhe a favor do jogador; sem corte d
   await db.query("UPDATE rounds SET created_at = now() - interval '2 hours' WHERE id = ANY($1)", [[ra.id, rb.id]]);
   const before = await balanceOf(a.id);
   assert.equal(await expireRounds(), 2);
-  assert.equal(await balanceOf(a.id), before + 1100);
-  const [r] = await db.query('SELECT end_reason FROM rounds WHERE id = $1', [rb.id]);
-  assert.equal(r.end_reason, 'forfeit');
+  assert.equal(await balanceOf(a.id), before);
+  const rows = await db.query('SELECT end_reason, prize_cents FROM rounds WHERE id = ANY($1)', [[ra.id, rb.id]]);
+  assert.ok(rows.every((r) => r.end_reason === 'timeout' && Number(r.prize_cents) === 0));
+});
+
+test('lista de possiveis robos: 20+ rodadas sem nunca ser cortado por rival', async () => {
+  const { suspects } = await import('./admin.js');
+  const bot = await makeUser('11900000020', 100000);
+  for (let i = 0; i < 20; i++) {
+    const { round } = await start(bot.id, { betCents: 500 });
+    const k = await cut(bot.id, round.id, { kind: 'moleque' });
+    if (!k.wind) await lose(bot.id, round.id, { reason: 'forfeit' });
+  }
+  const humano = await makeUser('11900000021', 100000);
+  for (let i = 0; i < 20; i++) { const { round } = await start(humano.id, { betCents: 500 }); await lose(humano.id, round.id, { reason: 'cut' }); }
+  const list = await suspects();
+  assert.ok(list.some((s) => s.id === bot.id));
+  assert.ok(!list.some((s) => s.id === humano.id));
+});
+
+test('cabecalhos: CSP sem style inline, Permissions-Policy e Referrer-Policy', async () => {
+  const r = await fetch(`${base}/`);
+  const csp = r.headers.get('content-security-policy');
+  assert.match(csp, /style-src-attr 'none'/);
+  assert.doesNotMatch(csp, /\*\./); // nenhum curinga de dominio
+  assert.match(r.headers.get('permissions-policy'), /camera=\(\)/);
+  assert.equal(r.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
 });

@@ -21,7 +21,10 @@ export async function createPixCharge({ chargeId, amountCents, expiresAt }) {
   };
 }
 
-/** Envia a transferencia PIX do saque. No mock, "paga" na hora. */
+/** Envia a transferencia PIX do saque. No mock, "paga" na hora.
+ *  Contrato de erro: recusa DEFINITIVA do PSP lanca erro com definitive = true
+ *  (o saque e estornado); qualquer outro erro e tratado como incerto (o PIX
+ *  pode ter saido) e o saque fica 'processing' ate o webhook/conciliacao. */
 export async function sendPixTransfer({ withdrawalId }) {
   return { providerRef: `mock_tr_${withdrawalId}`, status: 'paid' };
 }
@@ -39,7 +42,7 @@ export function parseWebhook(rawBody, headers) {
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
   const body = JSON.parse(rawBody.toString('utf8'));
-  return { type: body.type, providerRef: body.providerRef, amountCents: body.amountCents };
+  return { type: body.type, providerRef: body.providerRef, amountCents: body.amountCents, withdrawalId: body.withdrawalId };
 }
 
 /** Assinatura HMAC usada pelo mock (e pelos testes para simular o PSP). */

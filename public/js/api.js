@@ -17,7 +17,7 @@ export const Auth = {
   set(token, user) {
     this.token = user ? 'cookie' : '';
     this.user = user;
-    try { user ? localStorage.setItem(UK, JSON.stringify(user)) : localStorage.removeItem(UK); } catch (e) {}
+    try { user ? localStorage.setItem(UK, JSON.stringify({ id: user.id, username: user.username })) : localStorage.removeItem(UK); } catch (e) {}
   },
   clear() {
     this.token = ''; this.user = null;
@@ -154,9 +154,9 @@ export const Api = {
   },
   async withdrawInfo() {
     const j = await call('wallet/withdraw-info');
-    return { saqueMinimoCents: j.minCents, saqueMaximoCents: j.maxCents };
+    return { saqueMinimoCents: j.minCents, saqueMaximoCents: j.maxCents, rolloverRestanteCents: j.rolloverRestanteCents || 0 };
   },
-  withdraw: (amountCents, pixKey, cpf) => post('wallet/withdraw', { amountCents, pixKey, cpf }),
+  withdraw: (amountCents, pixKey, cpf, password) => post('wallet/withdraw', { amountCents, pixKey, cpf, password }),
 
   /* ---- jogo responsável ---- */
   responsavel: () => call('wallet/responsavel'),
@@ -179,7 +179,7 @@ export const Api = {
       saqueMinCents: j.saqueMinCents, saqueMaxCents: j.saqueMaxCents,
     };
   },
-  withdrawAffiliate: (amountCents, pixKey, cpf) => post('wallet/withdraw-affiliate', { amountCents, pixKey, cpf }),
+  withdrawAffiliate: (amountCents, pixKey, cpf, password) => post('wallet/withdraw-affiliate', { amountCents, pixKey, cpf, password }),
   refill: () => Promise.reject(Object.assign(new Error('Recarga indisponível.'), { status: 400 })),
 };
 

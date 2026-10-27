@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { wrap } from '../middleware/error.js';
 import { requireAuth } from '../middleware/session.js';
+import { gameLimiter } from '../middleware/rateLimit.js';
 import * as Game from '../domain/game.js';
 
 export const gameRouter = Router();
 gameRouter.use(requireAuth); // todo o jogo exige login
+gameRouter.use(gameLimiter); // por usuario: bot nao martela o banco
 
 gameRouter.get('/lobby', wrap(async (_req, res) => res.json(await Game.lobby())));
 

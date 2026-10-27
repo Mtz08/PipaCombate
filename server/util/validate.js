@@ -63,6 +63,6 @@ export function normalizeName(raw) {
 export function assertPassword(raw) {
   const pw = String(raw ?? '');
   if (pw.length < 8) throw domainError('WEAK_PASSWORD', 'Senha deve ter ao menos 8 caracteres');
-  if (pw.length > 72) throw domainError('WEAK_PASSWORD', 'Senha muito longa'); // limite do bcrypt
+  if (Buffer.byteLength(pw, 'utf8') > 72) throw domainError('WEAK_PASSWORD', 'Senha muito longa'); // bcrypt usa so 72 bytes
   return pw;
 }

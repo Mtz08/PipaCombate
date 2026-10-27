@@ -97,6 +97,7 @@ export const SCHEMAS = {
       withdrawMinCents: CONFIG.limits.withdrawMinCents,
       withdrawMaxCents: CONFIG.limits.withdrawMaxCents,
       withdrawAutoMaxCents: CONFIG.limits.withdrawAutoMaxCents,
+      rolloverPct: 100, // % do deposito que precisa ser apostado antes de sacar (0 = desliga)
     }),
     validar(v) {
       const out = {
@@ -105,6 +106,7 @@ export const SCHEMAS = {
         withdrawMinCents: int(v.withdrawMinCents, 100, 100000000, 'saque minimo'),
         withdrawMaxCents: int(v.withdrawMaxCents, 100, 100000000, 'saque maximo'),
         withdrawAutoMaxCents: int(v.withdrawAutoMaxCents, 0, 100000000, 'saque automatico ate'),
+        rolloverPct: int(v.rolloverPct, 0, 1000, 'rollover do deposito (%)'),
       };
       if (out.depositMaxCents < out.depositMinCents) throw bad('deposito maximo menor que o minimo');
       if (out.withdrawMaxCents < out.withdrawMinCents) throw bad('saque maximo menor que o minimo');

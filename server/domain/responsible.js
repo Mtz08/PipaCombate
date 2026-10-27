@@ -14,8 +14,14 @@ const ESPERA_MS = 24 * 3600 * 1000;
 
 const until = (u) => (u.selfExcludedUntil && u.selfExcludedUntil > Date.now() ? u.selfExcludedUntil : null);
 
-/** Bloqueia aposta de quem esta autoexcluido. */
+/** Conta bloqueada pela operacao (ex.: devolucao PIX): nada de apostar, depositar ou sacar. */
+export function assertNotBlocked(user) {
+  if (user.blockedAt) throw domainError('ACCOUNT_BLOCKED', 'Conta em analise. Fale com o suporte.', 403);
+}
+
+/** Bloqueia aposta de quem esta autoexcluido ou bloqueado. */
 export function assertCanPlay(user) {
+  assertNotBlocked(user);
   const ate = until(user);
   if (ate) throw domainError('SELF_EXCLUDED', `Voce pausou o jogo ate ${new Date(ate).toLocaleDateString('pt-BR')}.`, 403);
 }

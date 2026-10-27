@@ -79,7 +79,7 @@ export async function rotate(userId) {
 
 async function rotateIn(t, userId, clientSeed) {
   const old = await activeSeed(t, userId);
-  await FairSeeds.reveal(t, old.id);
+  await FairSeeds.reveal(t, old.id, old.serverSeed); // grava em texto puro: agora e publica
   const serverSeed = newServerSeed();
   await FairSeeds.create(t, {
     userId, serverSeed, serverSeedHash: sha256(serverSeed), clientSeed: clientSeed || old.clientSeed,

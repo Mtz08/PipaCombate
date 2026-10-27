@@ -2,6 +2,8 @@
 // executor `q` (db ou a transacao corrente) como 1o argumento, assim a mesma
 // funcao serve dentro e fora de transacao. Linhas saem em camelCase.
 
+import { seal, open } from '../util/crypto.js';
+
 const ms = (d) => (d ? new Date(d).getTime() : null);
 
 // ---------- users ----------
@@ -13,6 +15,9 @@ export function mapUser(r) {
     sessionVersion: r.session_version, createdAt: ms(r.created_at), role: r.role,
     referredBy: r.referred_by ?? null, termsAcceptedAt: ms(r.terms_accepted_at), termsVersion: r.terms_version ?? null,
     cpfHash: r.cpf_hash ?? null, utm: r.utm ?? null,
+    totpSecretEnc: r.totp_secret_enc ?? null, totpEnabled: !!r.totp_enabled, totpLastStep: r.totp_last_step == null ? null : Number(r.totp_last_step),
+    adminReauthUntil: ms(r.admin_reauth_until),
+    wagerRequiredCents: Number(r.wager_required_cents ?? 0), blockedAt: ms(r.blocked_at), blockedReason: r.blocked_reason ?? null,
     depLimitCents: r.dep_limit_cents == null ? null : Number(r.dep_limit_cents), depLimitPeriod: r.dep_limit_period ?? null,
     depLimitNextCents: r.dep_limit_next_cents == null ? null : Number(r.dep_limit_next_cents), depLimitNextPeriod: r.dep_limit_next_period ?? null,
     depLimitNextAt: ms(r.dep_limit_next_at), depLimitNextSet: !!r.dep_limit_next_set, selfExcludedUntil: ms(r.self_excluded_until),
@@ -218,16 +223,20 @@ export const Withdrawals = {
       [userId, amountCents, pixKey, pixKeyMask, provider, status, cpfEnc, source],
     ))[0]);
   },
-  /** Atualiza status; ao finalizar (paid/failed/rejected) apaga chave e CPF (LGPD). */
-  async finish(q, id, { status, providerRef = null }) {
+  async getByRef(q, ref) {
+    return mapWithdrawal((await q.query('SELECT * FROM withdrawals WHERE provider_ref = $1', [ref]))[0]) || null;
+  },
+  /** Atualiza status; ao finalizar (paid/failed/rejected) apaga chave e CPF (LGPD).
+   *  from: so muda se o status atual for um destes (devolve null se nao mudou). */
+  async finish(q, id, { status, providerRef = null, from = null }) {
     return mapWithdrawal((await q.query(
       `UPDATE withdrawals
          SET status = $2, provider_ref = COALESCE($3, provider_ref), updated_at = now(),
              pix_key = CASE WHEN $2 IN ('paid','failed','rejected') THEN NULL ELSE pix_key END,
              cpf_enc = CASE WHEN $2 = 'review' THEN cpf_enc ELSE NULL END
-       WHERE id = $1 RETURNING *`,
-      [id, status, providerRef],
-    ))[0]);
+       WHERE id = $1 AND ($4::text[] IS NULL OR status = ANY($4::text[])) RETURNING *`,
+      [id, status, providerRef, from],
+    ))[0]) || null;
   },
   async markReviewed(q, id, { by, note = null }) {
     return mapWithdrawal((await q.query(
@@ -257,8 +266,13 @@ export const Withdrawals = {
 
 // ---------- fair_seeds (provably fair) ----------
 
+// server_seed ativa fica cifrada ('enc:' + AES-GCM): quem le o banco ou um
+// backup nao descobre o vento das proximas rodadas. Ao revelar, vira texto puro.
+const ENC = 'enc:';
+const readSeed = (s) => (s && s.startsWith(ENC) ? open(s.slice(ENC.length)) : s);
+
 const mapSeed = (r) => r && {
-  id: r.id, userId: r.user_id, serverSeed: r.server_seed, serverSeedHash: r.server_seed_hash,
+  id: r.id, userId: r.user_id, serverSeed: readSeed(r.server_seed), serverSeedHash: r.server_seed_hash,
   clientSeed: r.client_seed, nonce: r.nonce, active: r.active, revealedAt: ms(r.revealed_at),
 };
 
@@ -272,6 +286,7 @@ export const FairSeeds = {
     ))[0]) || null;
   },
   async create(q, { userId, serverSeed, serverSeedHash, clientSeed }) {
+    serverSeed = ENC + seal(serverSeed);
     return mapSeed((await q.query(
       `INSERT INTO fair_seeds (user_id, server_seed, server_seed_hash, client_seed)
        VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -283,8 +298,8 @@ export const FairSeeds = {
     const rows = await q.query('UPDATE fair_seeds SET nonce = nonce + 1 WHERE id = $1 RETURNING nonce', [id]);
     return rows[0].nonce - 1;
   },
-  async reveal(q, id) {
-    await q.query('UPDATE fair_seeds SET active = false, revealed_at = now() WHERE id = $1', [id]);
+  async reveal(q, id, serverSeed) {
+    await q.query('UPDATE fair_seeds SET active = false, revealed_at = now(), server_seed = $2 WHERE id = $1', [id, serverSeed]);
   },
   async lastRevealed(q, userId) {
     return mapSeed((await q.query(

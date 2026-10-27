@@ -2,7 +2,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../db/index.js';
-import { Rounds } from '../db/repos.js';
+import { Rounds, FairSeeds } from '../db/repos.js';
 import { makeUser } from '../db/testing.js';
 import { CONFIG } from '../config.js';
 import { createDeposit } from './payments.js';
@@ -26,7 +26,11 @@ test('parametros do jogo pelo painel: a rodada guarda o RTP com que foi sorteada
   await setSetting('jogo', { rtpBps: 9800 }, null); // mudar depois nao afeta a verificacao
   const h = (await history(u.id)).rounds[0];
   assert.equal(h.rtpBps, 9200);
-  const seed = (await db.query('SELECT server_seed FROM fair_seeds WHERE id = $1', [r.seedId]))[0].server_seed;
+  // a seed ativa fica cifrada no banco; so o servidor (com DATA_KEY) le
+  const raw = (await db.query('SELECT server_seed FROM fair_seeds WHERE id = $1', [r.seedId]))[0].server_seed;
+  assert.ok(raw.startsWith('enc:'));
+  const seed = (await FairSeeds.get(db, r.seedId)).serverSeed;
+  assert.match(seed, /^[0-9a-f]{64}$/);
   assert.equal(windPoint(seed, h.clientSeed, h.nonce, h.rtpBps, h.maxMultX100), r.ceilingX100);
 });
 

@@ -5,18 +5,22 @@
 try { process.loadEnvFile(); } catch { /* sem .env: usa o ambiente */ }
 
 const env = process.env;
-const isProd = env.NODE_ENV === 'production';
+// Seguro por padrao: so 'development' e 'test' (explicitos) relaxam as regras.
+// Qualquer outro valor (vazio, 'staging', 'production'...) roda como producao.
 const isTest = env.NODE_ENV === 'test';
+const isProd = !['development', 'test'].includes(env.NODE_ENV);
 
 const DEV_SECRET = 'dev-only-secret-nao-use-em-producao';
 
 export const CONFIG = {
-  env: env.NODE_ENV || 'development',
+  env: env.NODE_ENV || 'production',
   isProd,
   isTest,
   port: Number(env.PORT) || 3000,
   // Atras de proxy/CDN (Nginx, Cloudflare): necessario para IP real no rate limit.
-  trustProxy: env.TRUST_PROXY ? Number(env.TRUST_PROXY) || env.TRUST_PROXY : false,
+  // Numero EXATO de proxies na frente (ex.: 1 = so a Cloudflare ou so o Nginx).
+  // Valor maior que o real deixa o cliente falsificar o IP pelo X-Forwarded-For.
+  trustProxy: /^\d+$/.test(env.TRUST_PROXY || '') ? Number(env.TRUST_PROXY) : false,
 
   db: {
     // Postgres real. Sem ele, cai no PGlite local (so dev/teste).
@@ -36,6 +40,8 @@ export const CONFIG = {
   // para o hash do CPF do titular. Obrigatoria em producao (min. 32 caracteres).
   dataKey: env.DATA_KEY || DEV_SECRET,
   sessionTtlMs: 1000 * 60 * 60 * 8, // 8h
+  adminSessionTtlMs: 1000 * 60 * 60 * 2, // admin: 2h
+  adminReauthMs: 1000 * 60 * 10,          // acoes criticas do admin: 2FA nos ultimos 10 min
 
   payments: {
     // 'mock' ate integrar o PSP. Trocar aqui + implementar o provider em server/payments/.
@@ -88,9 +94,6 @@ export const CONFIG = {
     roundTtlMin: Number(env.ROUND_TTL_MIN) || 30, // round aberto alem disso e encerrado automaticamente
   },
 
-  // Telefones que viram admin ao entrar (so digitos, separados por virgula).
-  adminPhones: (env.ADMIN_PHONES || '').split(',').map((p) => p.replace(/\D/g, '')).filter(Boolean),
-
   signupBonusCents: Number(env.SIGNUP_BONUS_CENTS) || 0,
 
   // Versao vigente dos termos de uso; troque ao publicar um texto novo.
@@ -103,9 +106,11 @@ if (isProd) {
   if (!env.DATABASE_URL) problems.push('DATABASE_URL (PGlite nao e para producao)');
   if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) problems.push('SESSION_SECRET (min. 32 caracteres)');
   if (!env.DATA_KEY || env.DATA_KEY.length < 32) problems.push('DATA_KEY (min. 32 caracteres)');
-  if (CONFIG.payments.provider !== 'mock' && (!env.PAYMENTS_WEBHOOK_SECRET || env.PAYMENTS_WEBHOOK_SECRET.length < 32)) {
-    problems.push('PAYMENTS_WEBHOOK_SECRET (min. 32 caracteres)');
-  }
+  // pagamento simulado em producao = deposito "pago" sem dinheiro entrar
+  if (CONFIG.payments.provider === 'mock') problems.push('PAYMENTS_PROVIDER (o pagamento simulado nao roda em producao)');
+  if (!env.PAYMENTS_WEBHOOK_SECRET || env.PAYMENTS_WEBHOOK_SECRET.length < 32) problems.push('PAYMENTS_WEBHOOK_SECRET (min. 32 caracteres)');
+  if (env.TRUST_PROXY && !/^\d+$/.test(env.TRUST_PROXY)) problems.push('TRUST_PROXY (use o numero de proxies, ex.: 1)');
+  if (env.ADMIN_PHONES) problems.push('ADMIN_PHONES (removido: crie admins com "npm run admin")');
   if (problems.length) {
     throw new Error(`Configuracao invalida para producao: ${problems.join(', ')}`);
   }

@@ -72,6 +72,8 @@ export async function start(userId, { betCents, map }) {
         userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100, rtpBps: g.rtpBps, maxMultX100: g.maxMultX100,
       });
       const balanceAfter = await applyDebit(t, user, bet, 'bet', { roundId: round.id, map: chosenMap });
+      // cada aposta desconta do rollover pendente do deposito
+      if (user.wagerRequiredCents > 0) await t.query('UPDATE users SET wager_required_cents = GREATEST(0, wager_required_cents - $2) WHERE id = $1', [userId, bet]);
       return { round: viewRound(round), balanceCents: balanceAfter };
     });
   } catch (err) {
@@ -87,7 +89,9 @@ export async function cut(userId, roundId, { kind } = {}) {
     const round = await requireOpenRound(t, userId, roundId);
     // le CONFIG na hora (ajustavel em teste); relogio do banco pode estar ~1ms a frente
     const minGap = CONFIG.game.minCutIntervalMs;
-    if (minGap > 0 && round.lastCutAt && Date.now() - round.lastCutAt < minGap) {
+    const cedo = minGap > 0 && round.lastCutAt
+      && (await t.query("SELECT now() - last_cut_at < $2 * interval '1 millisecond' AS cedo FROM rounds WHERE id = $1", [round.id, minGap]))[0].cedo;
+    if (cedo) {
       throw domainError('TOO_FAST', 'Corte muito rapido', 429);
     }
     const g = await getSetting('jogo', t);
@@ -116,9 +120,9 @@ export async function cashout(userId, roundId) {
   });
 }
 
-/** Fim sem premio: rival cortou a pipa ('cut') ou desistencia ('forfeit'). */
+/** Fim sem premio: rival cortou a pipa ('cut'), desistencia ('forfeit') ou abandono ('timeout'). */
 export async function lose(userId, roundId, { reason } = {}) {
-  const endReason = reason === 'cut' ? 'cut' : 'forfeit';
+  const endReason = ['cut', 'timeout'].includes(reason) ? reason : 'forfeit';
   return withUserLock(userId, async (t, user) => {
     const round = await requireRound(t, userId, roundId);
     if (round.state !== 'open') return { round: viewRound(round) };

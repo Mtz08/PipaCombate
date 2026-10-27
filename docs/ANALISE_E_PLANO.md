@@ -206,7 +206,10 @@ Não incluído: Pixel do Kwai (o site antigo também não carregava; precisa do 
 - Manifesto PWA, ícones e tela cheia.
 - Textos honestos: nada de "moedas fictícias" se o saldo for real.
 
-### Fase 8: Segurança (pedida em 27/10/2026, antes do pagamento)
+### Fase 8: Segurança ✅ concluída em 27/10/2026
+Feito: revisão em três frentes e correção de 3 achados críticos, 3 altos e os médios/baixos; detalhes, riscos que continuam e checklist de produção em [SEGURANCA.md](SEGURANCA.md). Migrações `010_seguranca.sql` e `011_antifraude_dinheiro.sql`. 67/67 testes.
+
+Escopo original:
 Proteger o site com tudo o que der, antes de existir dinheiro real circulando:
 - Revisão de segurança de todo o código (servidor e front), com correção do que aparecer.
 - Contas: senha forte, bloqueio progressivo de login, sessões (listar e encerrar), 2FA para admin.

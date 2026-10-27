@@ -209,6 +209,8 @@
     <label><span>Valor do saque</span><input id="wSaqVal" inputmode="decimal" placeholder="R$ 50,00"></label>
     <label><span>Chave PIX</span><input id="wSaqPix" autocapitalize="off" spellcheck="false" placeholder="CPF, e-mail, telefone ou aleatória"></label>
     <label><span>CPF do titular</span><input id="wSaqCpf" inputmode="numeric" placeholder="000.000.000-00"></label>
+    <label><span>Sua senha (confirmação)</span><input id="wSaqPw" type="password" autocomplete="current-password"></label>
+    <p id="wSaqRoll" class="note c" hidden></p>
     <p class="err" id="wSaqErr" hidden></p>
     <button id="wSaqBtn" class="btn btn-play"><span>SOLICITAR SAQUE</span></button>
     <p class="note c" id="wSaqMin"></p>
@@ -248,6 +250,7 @@
       <input id="indSaqVal" inputmode="decimal" placeholder="Valor R$">
       <input id="indSaqPix" autocapitalize="off" spellcheck="false" placeholder="Chave PIX">
       <input id="indSaqCpf" inputmode="numeric" placeholder="CPF do titular">
+      <input id="indSaqPw" type="password" autocomplete="current-password" placeholder="Sua senha (confirmação)">
       <p class="err" id="indSaqErr" hidden></p>
       <button id="indSaqBtn" class="btn btn-green"><span>SACAR COMISSÃO</span></button>
       <p class="note c" id="indSaqMin"></p>

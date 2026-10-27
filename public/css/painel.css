@@ -137,3 +137,5 @@ button.ghost { background: transparent; border: 1px solid var(--line); color: va
 .aff-form select{width:100%;padding:10px;border-radius:10px;background:var(--bg2);color:var(--fg);border:1px solid var(--line)}
 .aff-form textarea{width:100%;font-family:inherit}
 .aff-form input[type=color]{max-width:48px;padding:2px;height:40px}
+.card.warn{border-color:var(--warn)}
+.secret{font-size:1.1rem;letter-spacing:.06em;background:var(--bg2);padding:4px 8px;border-radius:8px}

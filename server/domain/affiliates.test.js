@@ -39,18 +39,37 @@ test('modelo deposito: % de cada deposito em 3 niveis', async () => {
   assert.equal(i.ganhoCents, 2000);
 });
 
-test('modelo CPA: paga uma vez, no 1o deposito acima do minimo', async () => {
+test('modelo CPA: so depois que o indicado deposita o minimo E aposta o minimo; paga uma vez', async () => {
   await config({ modelo: 'cpa', cpaCents: [1500, 500, 0], cpaDepositoMinCents: 3000 });
   const { b, c, d } = await cadeia();
-  await createDeposit(d.id, 2500); // abaixo do minimo: nao conta e ja nao e o 1o
-  await createDeposit(d.id, 5000);
-  assert.equal(await balanceOf(db, c.id), 0);
+  await createDeposit(d.id, 2500); // abaixo do minimo
+  const jogar = async (u, n) => { for (let i = 0; i < n; i++) { const { round } = await start(u.id, { betCents: 1000 }); await lose(u.id, round.id, { reason: 'cut' }); } };
+  await jogar(d, 2);
+  assert.equal(await balanceOf(db, c.id), 0); // nenhum deposito >= minimo
 
   const e = await user(c.id);
   await createDeposit(e.id, 5000);
-  await createDeposit(e.id, 5000);
+  assert.equal(await balanceOf(db, c.id), 0); // depositou mas ainda nao apostou (conta de fachada nao gera CPA)
+  await jogar(e, 2);
+  assert.equal(await balanceOf(db, c.id), 0); // apostou 2000 < 3000
+  await jogar(e, 2);
   assert.equal(await balanceOf(db, c.id), 1500);
   assert.equal(await balanceOf(db, b.id), 500);
+  await jogar(e, 1);
+  assert.equal(await balanceOf(db, c.id), 1500); // uma vez so
+});
+
+test('modelo deposito: quando o indicado saca, a comissao do valor sacado volta (sem farm deposita-saca)', async () => {
+  await config({ modelo: 'deposito', niveisPct: [10, 0, 0] });
+  await setSetting('limites', { rolloverPct: 0 }, null);
+  const { c, d } = await cadeia();
+  await createDeposit(d.id, 10000);
+  assert.equal(await balanceOf(db, c.id), 1000);
+  const w = await requestWithdrawal(d.id, { amountCents: 10000, pixKey: 'd@exemplo.com', cpf: '11144477735' });
+  assert.equal(await balanceOf(db, c.id), 0);
+  await rejectWithdrawal({ id: null }, w.withdrawal.id, { note: 'teste de estorno' }); // saque nao saiu: comissao volta
+  assert.equal(await balanceOf(db, c.id), 1000);
+  await setSetting('limites', null, null);
 });
 
 test('modelo revshare: % do resultado da casa, negativo quando o indicado ganha', async () => {

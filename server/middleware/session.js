@@ -17,8 +17,8 @@ function sign(payloadB64) {
 
 /** Gera e grava o cookie de sessao para o usuario. */
 export function issueSession(res, user) {
-  const exp = Date.now() + CONFIG.sessionTtlMs;
-  const payloadB64 = Buffer.from(JSON.stringify({ userId: user.id, v: user.sessionVersion, exp })).toString('base64url');
+  const iat = Date.now(), exp = iat + CONFIG.sessionTtlMs;
+  const payloadB64 = Buffer.from(JSON.stringify({ userId: user.id, v: user.sessionVersion, iat, exp })).toString('base64url');
   res.cookie(COOKIE, `${payloadB64}.${sign(payloadB64)}`, {
     httpOnly: true,
     sameSite: 'lax',          // defesa CSRF (ver middleware/csrf.js)
@@ -46,7 +46,10 @@ export async function attachUser(req, _res, next) {
       if (payload && payload.exp > Date.now() && isUuid(payload.userId)) {
         try {
           const user = await Users.getById(db, payload.userId);
-          if (user && user.sessionVersion === payload.v) req.user = user;
+          // admin: sessao curta (cookie roubado vale menos tempo)
+          const iat = payload.iat ?? payload.exp - CONFIG.sessionTtlMs;
+          const adminExpired = user?.role === 'admin' && Date.now() - iat > CONFIG.adminSessionTtlMs;
+          if (user && user.sessionVersion === payload.v && !adminExpired) req.user = user;
         } catch (err) { return next(err); }
       }
     }

@@ -57,7 +57,15 @@ test('fluxo completo: cadastro -> deposito -> jogo -> saque', async () => {
   assert.equal(act.body.round.id, s.body.round.id);
   await c('POST', `/api/game/${s.body.round.id}/lose`);
 
-  const w = await c('POST', '/api/wallet/withdraw', { amountCents: 10000, pixKey: 'ana@exemplo.com', cpf: CPF_OK });
+  const pedido = { amountCents: 10000, pixKey: 'ana@exemplo.com', cpf: CPF_OK };
+  // rollover: o deposito ainda nao foi apostado
+  const r1 = await c('POST', '/api/wallet/withdraw', { ...pedido, password: 'senha-forte-1' });
+  assert.equal(r1.body.error.code, 'ROLLOVER_PENDING');
+  const me = await c('GET', '/api/auth/me');
+  await db.query('UPDATE users SET wager_required_cents = 0 WHERE id = $1', [me.body.user.id]); // (apostou)
+  // sessao sozinha nao saca: precisa da senha
+  assert.equal((await c('POST', '/api/wallet/withdraw', pedido)).body.error.code, 'BAD_PASSWORD');
+  const w = await c('POST', '/api/wallet/withdraw', { ...pedido, password: 'senha-forte-1' });
   assert.equal(w.status, 201);
   assert.equal(w.body.balanceCents, 39000);
 
@@ -144,10 +152,10 @@ test('webhook com assinatura invalida -> 401; JSON malformado -> 400', async () 
   assert.equal((await c('POST', '/api/game/start', '{quebrado')).status, 400);
 });
 
-test('webhook assinado de cobranca inexistente -> 404 (PSP reenvia depois)', async () => {
+test('webhook assinado de cobranca inexistente -> 200 e ignorado (PSP nao fica reenviando)', async () => {
   const body = JSON.stringify({ type: 'charge.paid', providerRef: 'nao-existe', amountCents: 1 });
   const r = await client()('POST', '/api/webhooks/payments', body, { xhr: false, headers: { 'x-signature': mock.sign(Buffer.from(body)) } });
-  assert.equal(r.status, 404);
+  assert.equal(r.status, 200);
 });
 
 test('headers de seguranca presentes e sem x-powered-by', async () => {

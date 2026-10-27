@@ -5,11 +5,42 @@ import { brl, esc } from './api.js';
 
 const $ = (s) => document.querySelector(s);
 const H = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
-async function api(path, body) {
+async function api(path, body, retry = true) {
   const r = await fetch(`/api/admin/${path}`, { method: body ? 'POST' : 'GET', headers: H, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(j?.error?.message || 'Erro'), { status: r.status });
+  const code = j?.error?.code;
+  // acao critica: pede o codigo do autenticador e tenta de novo uma vez
+  if (code === 'ADMIN_REAUTH_REQUIRED' && retry) {
+    const otp = prompt('Ação protegida. Digite o código de 6 dígitos do app autenticador:');
+    if (!otp) throw new Error('Ação cancelada.');
+    await api('2fa/confirm', { code: otp }, false);
+    return api(path, body, false);
+  }
+  if (code === 'ADMIN_2FA_REQUIRED') { show2faSetup(); throw new Error('Ative o 2FA (no topo da página) para fazer isso.'); }
+  if (!r.ok) throw Object.assign(new Error(j?.error?.message || 'Erro'), { status: r.status, code });
   return j;
+}
+
+/* ---------- 2FA do admin (app autenticador: Google Authenticator, Authy...) ---------- */
+async function show2faSetup() {
+  const box = $('#tfa');
+  const s = await api('2fa');
+  if (s.ativo) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<h2>⚠️ Ative o 2FA do admin</h2>
+    <p class="hint">Sem 2FA, o painel só mostra dados: aprovar saque, ajustar saldo e mudar configurações ficam bloqueados.</p>
+    <button id="tfaGo" class="primary">Gerar chave</button><div id="tfaStep"></div>`;
+  $('#tfaGo').onclick = async () => {
+    const { secret, uri } = await api('2fa/setup', {});
+    $('#tfaStep').innerHTML = `<p>1. No app autenticador, adicione uma conta com esta chave (ou toque no link no celular):</p>
+      <p><code class="secret">${esc(secret.replace(/(.{4})/g, '$1 ').trim())}</code> · <a href="${esc(uri)}">abrir no app</a></p>
+      <p>2. Digite o código de 6 dígitos que o app mostrar:</p>
+      <div class="row"><input id="tfaCode" inputmode="numeric" maxlength="6" placeholder="000000"><button id="tfaOk" class="primary">Ativar</button></div><p id="tfaMsg" class="msg"></p>`;
+    $('#tfaOk').onclick = async () => {
+      try { await api('2fa/enable', { code: $('#tfaCode').value }, false); box.innerHTML = '<p>✅ 2FA ativo. Guarde o celular: se perder, o reset é pelo servidor (npm run admin -- zerar-2fa).</p>'; audit(); }
+      catch (err) { $('#tfaMsg').textContent = err.message; }
+    };
+  };
 }
 const LABEL = { deposit: 'Deposito', withdraw: 'Saque', withdraw_reversal: 'Estorno', bet: 'Aposta', prize: 'Premio', bonus: 'Bonus', adjust: 'Ajuste' };
 const dt = (v) => new Date(v).toLocaleString('pt-BR');
@@ -18,6 +49,7 @@ async function boot() {
   try { await api('stats'); } catch { $('#app').innerHTML = '<p class="msg">Acesso restrito. <a href="/">Voltar</a></p>'; return; }
   $('#app').innerHTML = `
     <header><div class="brand small"><span class="logo"></span><b>Admin</b></div><a class="link" href="/">voltar ao jogo</a></header>
+    <section id="tfa" class="card warn" hidden></section>
     <section class="card"><h2>Numeros</h2><div id="stats" class="grid"></div>
       <button id="btnExpire" class="link">encerrar rounds abandonados agora</button></section>
     <section class="card"><h2>Saques para aprovar <small id="wqN"></small></h2>
@@ -44,13 +76,16 @@ async function boot() {
         <div class="row"><b>Saque de comissão R$ mín/máx</b><input name="sMin" type="number" min="1" step="0.01"><input name="sMax" type="number" min="1" step="0.01"></div>
         <button class="primary" type="submit">Salvar</button><p id="affMsg" class="msg"></p>
       </form></section>
+    <section class="card"><h2>Possíveis robôs <small id="susN"></small></h2>
+      <p class="hint">Últimos 7 dias, 20+ rodadas e nunca cortados por um rival. É só um sinal: confira o histórico antes de agir.</p>
+      <ul id="sus" class="ledger"></ul></section>
     <section class="card"><h2>Jogadores</h2>
       <div class="row"><input id="q" placeholder="Telefone ou nome"><button id="btnQ">Buscar</button></div>
       <ul id="users" class="ledger"></ul><div id="detail"></div></section>
     <section class="card"><h2>Auditoria</h2><ul id="audit" class="ledger"></ul></section>`;
   $('#btnQ').onclick = search; $('#q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
   $('#btnExpire').onclick = async () => { const r = await api('expire-rounds', {}); alert(`${r.expired} round(s) encerrado(s).`); stats(); };
-  stats(); search(); audit(); withdrawals(); affiliates();
+  show2faSetup(); stats(); search(); audit(); withdrawals(); affiliates(); suspects();
   settingsForm('jogo', '#fJogo', JOGO); settingsForm('limites', '#fLim', LIMITES); publicoForm();
   settingsForm('marketing', '#fMkt', MARKETING);
 }
@@ -68,6 +103,7 @@ const LIMITES = [
   ['depositMinCents', 'Depósito mínimo R$', 'reais'], ['depositMaxCents', 'Depósito máximo R$', 'reais'],
   ['withdrawMinCents', 'Saque mínimo R$', 'reais'], ['withdrawMaxCents', 'Saque máximo R$', 'reais'],
   ['withdrawAutoMaxCents', 'Saque automático até R$ (0 = todos passam por aprovação)', 'reais'],
+  ['rolloverPct', 'Rollover: % do depósito a apostar antes de sacar (0 desliga)', 'pctx'],
 ];
 const MARKETING = [
   ['metaPixelId', 'Pixel do Meta (ID numérico)', 'txt'], ['tiktokPixelId', 'Pixel do TikTok (ID)', 'txt'],
@@ -169,6 +205,13 @@ async function affiliates() {
   };
 }
 
+async function suspects() {
+  const { suspects: list } = await api('suspects');
+  $('#susN').textContent = list.length ? `(${list.length})` : '';
+  $('#sus').innerHTML = list.map((s) => `<li data-id="${esc(s.id)}" class="click"><span>${esc(s.name)} <small>${esc(s.phone)} · ${s.rodadas} rodadas · sacou ${s.sacou} · ${s.cortesMedios} cortes/rodada</small></span><span>${brl(s.lucroCents)}</span></li>`).join('') || '<li class="hint">Nenhum sinal.</li>';
+  $('#sus').onclick = (e) => { const li = e.target.closest('li[data-id]'); if (li) detail(li.dataset.id); };
+}
+
 async function withdrawals() {
   const { withdrawals: list } = await api('withdrawals');
   $('#wqN').textContent = list.length ? `(${list.length})` : '';
@@ -216,7 +259,8 @@ async function detail(id) {
   const d = await api(`users/${encodeURIComponent(id)}`);
   $('#detail').innerHTML = `
     <div class="revealed">
-      <p><b>${esc(d.user.name)}</b> · ${esc(d.user.phone)} · saldo <b>${brl(d.user.balanceCents)}</b></p>
+      <p><b>${esc(d.user.name)}</b> · ${esc(d.user.phone)} · saldo <b>${brl(d.user.balanceCents)}</b>${d.user.wagerRequiredCents ? ` · falta apostar ${brl(d.user.wagerRequiredCents)}` : ''}</p>
+      ${d.user.blockedAt ? `<p class="msg">⛔ Bloqueada: ${esc(d.user.blockedReason || '')} <button id="btnUnblock">Desbloquear</button></p>` : ''}
       <p class="hint">Origem: ${d.user.utm ? esc(Object.entries(d.user.utm).map(([k, x]) => `${k}=${x}`).join(' · ')) : 'sem UTM'}${d.user.ref ? ` · indicado por código ${esc(d.user.ref)}` : ''}</p>
       <div class="row"><input id="adjV" type="number" placeholder="Ajuste R$ (+/-)"><input id="adjR" placeholder="Motivo (obrigatorio)"><button id="btnAdj">Ajustar</button></div>
       <p id="adjMsg" class="msg"></p>
@@ -224,6 +268,11 @@ async function detail(id) {
       <details><summary>Rounds (${d.rounds.length})</summary><ul class="ledger">${d.rounds.map((r) => `<li><span>${esc(r.endReason || r.state)} · ${(r.multX100 / 100).toFixed(2)}x · vento ${(r.ceilingX100 / 100).toFixed(2)}x</span><span>${brl(r.prizeCents - r.betCents)}</span></li>`).join('')}</ul></details>
       <details><summary>Auditoria (${d.audit.length})</summary><ul class="ledger">${d.audit.map((a) => `<li><span>${esc(a.action)}</span><small>${dt(a.created_at)}</small></li>`).join('')}</ul></details>
     </div>`;
+  if ($('#btnUnblock')) $('#btnUnblock').onclick = async () => {
+    const reason = prompt('Motivo do desbloqueio (fica na auditoria):');
+    if (!reason) return;
+    try { await api(`users/${encodeURIComponent(id)}/unblock`, { reason }); await detail(id); audit(); } catch (err) { alert(err.message); }
+  };
   $('#btnAdj').onclick = async () => {
     try {
       const cents = Math.round(parseFloat(String($('#adjV').value).replace(',', '.')) * 100);
