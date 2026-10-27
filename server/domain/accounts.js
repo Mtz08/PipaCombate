@@ -19,22 +19,27 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password-nunca-usado', BCRYPT_COST);
 const REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newReferralCode = () => [...randomBytes(8)].map((b) => REF_ALPHABET[b % REF_ALPHABET.length]).join('');
 
-/** Cadastro. Rejeita telefone ja usado (409). ref e o codigo de afiliado de origem. */
-export async function register({ name, phone, password, ref }) {
+/** Cadastro. Rejeita telefone ja usado (409). ref e o codigo de afiliado de origem.
+ *  terms: aceite de "maior de 18 + termos de uso", obrigatorio. */
+export async function register({ name, phone, password, ref, terms }) {
   const cleanName = normalizeName(name);
   const cleanPhone = normalizePhone(phone);
   assertPassword(password);
+  if (terms !== true) throw domainError('TERMS_REQUIRED', 'Confirme que tem 18 anos ou mais e aceita os termos');
 
   if (await Users.getByPhone(db, cleanPhone)) {
     throw domainError('PHONE_TAKEN', 'Telefone ja cadastrado', 409);
   }
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-  const cleanRef = ref ? String(ref).replace(/[^\w-]/g, '').slice(0, 32) || null : null;
+  const cleanRef = ref ? String(ref).replace(/[^\w-]/g, '').toUpperCase().slice(0, 32) || null : null;
+  // codigo inexistente nao barra o cadastro: so nao vincula a nenhum afiliado
+  const referrer = cleanRef ? await Users.getByReferralCode(db, cleanRef) : null;
 
   try {
     return await tx(async (t) => {
       const user = await Users.create(t, {
         name: cleanName, phone: cleanPhone, passwordHash, ref: cleanRef, referralCode: newReferralCode(),
+        referredBy: referrer?.id ?? null, termsVersion: CONFIG.termsVersion,
       });
       if (CONFIG.signupBonusCents > 0) await applyCredit(t, user, CONFIG.signupBonusCents, 'bonus');
       return user;

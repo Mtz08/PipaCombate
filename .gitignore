@@ -4,3 +4,6 @@ node_modules/
 .DS_Store
 data/
 deploy/oracle/.env
+
+# copia do front-end do site antigo (so referencia, nao versionar)
+referencia/

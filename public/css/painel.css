@@ -1,0 +1,133 @@
+/* Identidade visual propria do Pipa Combate. Tokens em :root. */
+:root {
+  --bg: #0b1020; --bg2: #121a33; --card: #161f3d; --line: #263160;
+  --fg: #eef2ff; --mut: #9aa6c8;
+  --acc: #ffd60a; --acc-fg: #231a00;
+  --ok: #4ade80; --ok-fg: #052e14;
+  --warn: #f59e0b; --bad: #f87171;
+  --r: 14px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(1200px 600px at 50% -200px, #1d2b5c 0%, var(--bg) 60%) fixed, var(--bg);
+  color: var(--fg);
+  -webkit-tap-highlight-color: transparent;
+}
+#app { max-width: 560px; margin: 0 auto; padding: 16px 16px 40px; }
+[hidden] { display: none !important; }
+
+/* marca */
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { margin: 8px 0; font-size: 1.9rem; font-weight: 900; letter-spacing: -.02em; }
+.brand.small { gap: 8px; }
+.logo { width: 28px; height: 28px; display: inline-block; transform: rotate(45deg); border-radius: 4px;
+  background: conic-gradient(var(--acc) 0 25%, #e63946 0 50%, var(--acc) 0 75%, #e63946 0); box-shadow: 0 2px 10px rgba(255,214,10,.35); }
+.brand.small .logo { width: 18px; height: 18px; }
+
+.mock { color: var(--warn); font-size: .85rem; margin: 4px 0 16px; }
+.legal { color: var(--mut); font-size: .75rem; text-align: center; margin-top: 18px; }
+
+/* formularios e botoes */
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.tabs button { flex: 1; background: var(--card); color: var(--mut); border: 1px solid var(--line); }
+.tabs button.active { color: var(--fg); border-color: var(--acc); }
+form, .card { background: var(--card); padding: 16px; border-radius: var(--r); margin-bottom: 16px; border: 1px solid var(--line); }
+.card h2 { margin: 0 0 10px; font-size: 1.05rem; } .card h2 small { color: var(--warn); font-size: .65em; }
+input, textarea { width: 100%; padding: 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--bg2); color: var(--fg); font-size: 1rem; }
+input:focus, textarea:focus { outline: 2px solid var(--acc); outline-offset: 1px; }
+button { background: #2b3870; color: var(--fg); border: 0; padding: 12px 16px; border-radius: 10px; font-weight: 800; font-size: 1rem; cursor: pointer; transition: transform .08s, filter .15s; }
+button:hover:not([disabled]) { filter: brightness(1.1); }
+button:active:not([disabled]) { transform: translateY(1px) scale(.99); }
+button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+button[disabled] { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--acc); color: var(--acc-fg); }
+button.cash { background: var(--ok); color: var(--ok-fg); }
+.link { background: none; color: var(--mut); padding: 4px 0; font-weight: 500; text-decoration: underline; font-size: .9rem; }
+.check { display: flex; gap: 8px; align-items: center; font-size: .85rem; color: var(--mut); margin: 6px 0 10px; }
+.check input { width: auto; margin: 0; }
+.check a, .doc a { color: var(--acc); }
+
+/* paginas de texto (termos, privacidade) */
+.doc { line-height: 1.6; }
+.doc h2 { font-size: 1.1rem; margin: 22px 0 6px; }
+.doc .draft { color: var(--warn); border: 1px solid var(--warn); border-radius: var(--r); padding: 10px 12px; font-size: .9rem; }
+form button[type="submit"] { width: 100%; margin-top: 6px; }
+
+header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.saldo { font-weight: 700; color: var(--mut); } .saldo span { color: var(--acc); font-size: 1.1rem; margin-left: 4px; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row input { flex: 1; min-width: 120px; }
+.row button { white-space: nowrap; }
+.chips, .picker { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.chip { background: var(--bg2); color: var(--fg); border: 1px solid var(--line); padding: 7px 12px; font-weight: 700; font-size: .9rem; }
+.chip.on { border-color: var(--acc); color: var(--acc); }
+
+/* skins */
+.skins { margin: 4px 0 10px; }
+.swatch { width: 38px; height: 38px; padding: 0; border-radius: 8px; border: 2px solid transparent;
+  background: linear-gradient(135deg, var(--a) 0 50%, var(--b) 50% 100%); }
+.swatch.on { border-color: var(--acc); box-shadow: 0 0 0 2px rgba(255,214,10,.3); }
+
+/* palco do jogo */
+.game-card { padding: 0; overflow: hidden; }
+.game-card > #setup, .game-card > #game, .game-card > .hint { padding: 0 16px; }
+.game-card > #setup { padding-top: 14px; }
+.game-card > .hint { padding-bottom: 14px; }
+.stage { position: relative; aspect-ratio: 3 / 4; max-height: 72vh; width: 100%; background: #4aa3df; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+.hud { position: absolute; left: 0; right: 0; top: 10px; text-align: center; pointer-events: none; text-shadow: 0 2px 6px rgba(0,0,0,.45); }
+.hud-mult { font-size: clamp(2rem, 9vw, 3.2rem); font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+.hud-info { margin-top: 6px; font-weight: 700; color: #fff; font-size: .95rem; }
+.mute { position: absolute; right: 8px; bottom: 8px; padding: 6px 10px; font-size: .75rem; background: rgba(0,0,0,.35); color: #fff; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 14px; }
+.controls button { padding: 16px 10px; font-size: 1.05rem; }
+.quit { display: block; margin: 8px auto 0; }
+
+.msg { color: var(--mut); min-height: 1.2em; font-size: .9rem; }
+.hint { color: var(--mut); font-size: .8rem; margin: 8px 0; }
+.win { color: var(--ok); font-weight: 800; padding-top: 12px; } .lose { color: var(--bad); font-weight: 800; padding-top: 12px; }
+
+/* pix e extrato */
+.pix textarea { font-family: ui-monospace, monospace; resize: none; font-size: .85rem; }
+.ledger { list-style: none; padding: 0; margin: 0; }
+.ledger li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.ledger li small { color: var(--mut); }
+.ledger li > small:last-child { grid-column: 1 / -1; font-size: .75rem; }
+.pos { color: var(--ok); font-weight: 800; } .neg { color: var(--bad); font-weight: 800; }
+
+/* jogo justo */
+.ok-tag { color: var(--ok) !important; }
+.fair { margin: 6px 0 10px; display: grid; gap: 2px; }
+.fair dt { color: var(--mut); font-size: .75rem; margin-top: 6px; }
+.fair dd { margin: 0; }
+.mono { font-family: ui-monospace, monospace; font-size: .78rem; word-break: break-all; }
+.revealed { margin-top: 12px; padding: 10px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--line); }
+.revealed p { margin: 0 0 4px; }
+.hist { margin-top: 12px; } .hist summary { cursor: pointer; font-weight: 700; color: var(--mut); padding: 6px 0; }
+
+/* combate */
+.hp { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 8px; background: rgba(0,0,0,.4); border-radius: 6px; overflow: hidden; pointer-events: none; }
+.hp > div { height: 100%; width: 100%; background: linear-gradient(90deg, #ef4444, #facc15, #4ade80); }
+.mute { bottom: 26px; }
+.rules { margin: 10px 0; color: var(--mut); font-size: .85rem; } .rules summary { cursor: pointer; font-weight: 700; }
+
+button.ghost { background: transparent; border: 1px solid var(--line); color: var(--mut); width: 100%; margin-top: 8px; font-size: .9rem; }
+.kid-edit { display: flex; gap: 12px; align-items: flex-start; }
+#kidPreview { background: var(--bg2); border-radius: 12px; flex: none; }
+.kid-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.dot { width: 26px; height: 26px; padding: 0; border-radius: 50%; background: var(--c); border: 2px solid var(--line); }
+.dot.on, .kid-row .chip.on { border-color: var(--acc); }
+
+/* admin */
+.admin { max-width: 900px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.grid > div { background: var(--bg2); border-radius: 10px; padding: 10px; display: grid; gap: 4px; }
+.grid small { color: var(--mut); }
+.click { cursor: pointer; } .click:hover { background: var(--bg2); }
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+}

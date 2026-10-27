@@ -1,15 +1,337 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pipa Combate</title>
-  <meta name="description" content="Pipa Combate">
-  <meta name="theme-color" content="#0f1221">
-  <link rel="stylesheet" href="/css/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Pipa Combate</title>
+<meta name="description" content="Pipa Combate — aposte, corte as pipas rivais e saque via PIX antes que cortem a sua.">
+<meta name="theme-color" content="#1b1433">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pipa Combate">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=d21">
 </head>
 <body>
-  <main id="app"><p>Carregando…</p></main>
-  <script type="module" src="/js/main.js"></script>
+<div id="splash">
+  <svg class="sp-kite" viewBox="0 0 60 90" aria-hidden="true"><path d="M30 4 L54 34 L30 64 L6 34 Z" fill="#e03131" stroke="#1b1433" stroke-width="4" stroke-linejoin="round"/><path d="M30 4 L54 34 L30 64 Z" fill="#fff"/><path d="M30 4 L54 34 L30 64 L6 34 Z" fill="none" stroke="#1b1433" stroke-width="4" stroke-linejoin="round"/><path d="M30 4 V64 M6 34 Q30 20 54 34" fill="none" stroke="#5b3a1e" stroke-width="2.5"/><path d="M30 64 C24 72 36 76 29 84" fill="none" stroke="#fff" stroke-width="2"/><path d="M26 71 l-6 -3 v6z M34 71 l6 -3 v6z" fill="#ffd43b"/><path d="M25 81 l-6 -3 v6z M33 81 l6 -3 v6z" fill="#339af0"/></svg>
+  <b>PIPA COMBATE</b><small>subindo na laje…</small><i class="sp-bar"><i></i></i>
+</div>
+<div id="rotate"><div class="rot-ic">📱</div><b>Gire o celular</b><span>O Pipa Combate é jogado em pé</span></div>
+
+<div id="app">
+<canvas id="game"></canvas>
+<div id="sa" aria-hidden="true"></div>
+
+<!-- ================= HUD ================= -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="hud-l">
+      <div id="hWave" class="wave-badge">ONDA 1</div>
+      <div class="cuts-pill">✂️ <b id="hCuts">0</b></div>
+    </div>
+    <div class="hud-c">
+      <div class="hpbar"><span class="hp-ic">❤️</span><div class="bar"><i id="hHp"></i></div></div>
+    </div>
+    <button id="btnPause" class="round-btn small" aria-label="Pausar">
+      <svg viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></svg>
+    </button>
+  </div>
+  <div id="betBox" class="betbox">
+    <span class="bb-l">APOSTA<b id="betStake">0,00</b></span>
+    <span id="betPct" class="bb-p">+0%</span>
+    <span class="bb-w"><span class="coin"></span><b id="betWin">0,00</b></span>
+  </div>
+  <div class="practice-tag">🎯 TREINO · sem aposta</div>
+  <div id="bossBar" class="boss hidden"><div id="bossName" class="boss-name"></div><div class="bar"><i id="bossHp"></i></div></div>
+  <div id="hBuffs" class="h-buffs"></div>
+  <button id="btnCash" class="cash" aria-label="Sacar"><small id="cashLbl">SACAR</small><b><span class="coin"></span><span id="cashVal">0,00</span></b></button>
+  <button id="btnDash" class="dash" aria-label="Relada"><span class="ic">⚡</span><small>RELADA</small></button>
+  <div id="hint" class="hint hidden"><span id="hintTxt"></span></div>
+</div>
+<div id="vignette"></div>
+<button id="soundHint" class="sound-hint hidden">🔊 Toque na tela para ligar o som</button>
+<div id="banner"></div>
+<div id="announce"></div>
+<div id="toasts"></div>
+
+<!-- ================= CADASTRO / LOGIN ================= -->
+<section id="auth" class="screen center hidden">
+  <div class="panel auth-panel">
+    <canvas id="authHero" class="auth-hero" aria-hidden="true"></canvas>
+    <h1 class="logo"><span>PIPA</span><span>COMBATE</span></h1>
+    <p class="tag">Aposte, corte as pipas rivais e <b>saque</b> antes que cortem a sua.</p>
+    <div id="authTabs" class="tabs">
+      <button class="tab" data-t="reg">Criar conta</button>
+      <button class="tab" data-t="login">Entrar</button>
+    </div>
+    <form id="fReg" class="form" novalidate>
+      <label><span>Nome</span><input name="name" maxlength="80" autocomplete="name" autocapitalize="words" placeholder="Seu nome"></label>
+      <label><span>Telefone (WhatsApp)</span><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999"></label>
+      <div class="two">
+        <label><span>Senha</span><input name="password" type="password" autocomplete="new-password" placeholder="mín. 8"></label>
+        <label><span>Confirmar</span><input name="password2" type="password" autocomplete="new-password"></label>
+      </div>
+      <label><span>Código de indicação <small>(opcional)</small></span><input name="ref" maxlength="12" autocapitalize="characters" autocomplete="off" placeholder="tem um código?"></label>
+      <label class="check"><input type="checkbox" name="aceite"><i></i><span>Sou maior de <b>18 anos</b> e li os <a href="/termos.html" target="_blank" rel="noopener">termos de uso</a> e a <a href="/privacidade.html" target="_blank" rel="noopener">privacidade</a>.</span></label>
+      <p class="err" hidden></p>
+      <button type="submit" class="btn btn-play"><span>CRIAR CONTA E JOGAR</span></button>
+    </form>
+    <form id="fLogin" class="form hidden" novalidate>
+      <label><span>Telefone</span><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999"></label>
+      <label><span>Senha</span><input name="password" type="password" autocomplete="current-password"></label>
+      <p class="err" hidden></p>
+      <button type="submit" class="btn btn-play"><span>ENTRAR</span></button>
+    </form>
+    <p class="fine">🎮 +18 · Jogue com responsabilidade · Depósito e saque via PIX</p>
+  </div>
+</section>
+
+<!-- ================= LOBBY ================= -->
+<section id="lobby" class="screen lobby hidden">
+  <header class="lb-top">
+    <button class="me" data-sheet="char"><canvas id="uAva" class="ava" aria-hidden="true"></canvas><span class="me-i"><b id="uName"></b><small>✏️ seu bonequinho</small></span></button>
+    <button id="balBox" class="bal" data-sheet="wallet" aria-label="Carteira"><span class="coin"></span><b class="js-bal">0,00</b><i class="wallet-plus">＋</i></button>
+    <button class="round-btn small" data-sheet="settings" aria-label="Ajustes">⚙️</button>
+  </header>
+
+  <div id="lbScroll" class="lb-scroll">
+    <div id="heroBox" class="hero-box">
+      <div class="brand">
+        <svg class="brand-kite" viewBox="0 0 60 90" aria-hidden="true">
+          <path d="M30 4 L54 34 L30 64 L6 34 Z" fill="#e03131" stroke="#1b1433" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M30 4 L54 34 L30 64 Z" fill="#fff"/>
+          <path d="M30 4 L54 34 L30 64 L6 34 Z" fill="none" stroke="#1b1433" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M30 4 V64 M6 34 Q30 20 54 34" fill="none" stroke="#5b3a1e" stroke-width="2.5"/>
+          <path d="M30 64 C24 72 36 76 29 84" fill="none" stroke="#1b1433" stroke-width="2"/>
+          <path d="M26 71 l-6 -3 v6z M34 71 l6 -3 v6z" fill="#ffd43b" stroke="#1b1433" stroke-width="1.2"/>
+          <path d="M25 81 l-6 -3 v6z M33 81 l6 -3 v6z" fill="#339af0" stroke="#1b1433" stroke-width="1.2"/>
+        </svg>
+        <h1 class="logo sm"><span>PIPA</span><span>COMBATE</span></h1>
+      </div>
+      <button id="mapTag" class="map-tag"></button>
+    </div>
+
+    <button id="indicaCard" class="indica-card" data-sheet="indicacao">
+      <span class="indica-ic">🎁</span>
+      <span class="indica-txt"><b>Indique e Ganhe</b><small>Convide amigos e ganhe % de cada depósito deles</small></span>
+      <span class="indica-go">›</span>
+    </button>
+
+    <section id="secMaps" class="sec">
+      <h3 class="sec-h"><i class="kt"></i>Escolha o cenário</h3>
+      <div id="mapGrid" class="hscroll maps"></div>
+    </section>
+
+    <section class="sec">
+      <h3 class="sec-h"><i class="kt k2"></i>Sua pipa</h3>
+      <div id="kiteGrid" class="hscroll kites"></div>
+    </section>
+
+    <section class="sec char-card">
+      <div><h3 class="sec-h"><i class="kt k3"></i>Seu bonequinho</h3><p class="note">Roupa, cabelo, rosto, óculos, corrente, carretel e a dancinha quando você corta.</p></div>
+      <button class="btn btn-2 small" data-sheet="char">✏️ Personalizar</button>
+    </section>
+
+    <section class="sec">
+      <h3 class="sec-h"><i class="kt k4"></i>Quanto vale cada corte</h3>
+      <div id="payout" class="payout"></div>
+      <p id="capNote" class="note c"></p>
+      <p class="note c">Uma pipa por aposta: cortaram a sua, perdeu. Saque quando quiser, menos no meio de uma cruzada.</p>
+    </section>
+
+    <section class="sec">
+      <div id="histTabs" class="tabs"><button class="tab on" data-t="hist">Minhas rodadas</button><button class="tab" data-t="top">Maiores ganhos</button></div>
+      <ul id="histList" class="rlist"></ul>
+      <ul id="topList" class="rlist hidden"></ul>
+    </section>
+
+    <section class="sec steps">
+      <h3 class="sec-h"><i class="kt"></i>Como funciona</h3>
+      <ol>
+        <li><b>Aposte</b> e solte sua pipa na laje.</li>
+        <li><b>Cruze a linha</b> do rival e <b>rele rápido</b> pra cortar.</li>
+        <li>Cada corte <b>soma %</b> na aposta. <b>Saque</b> antes que cortem você!</li>
+      </ol>
+      <button class="link" data-sheet="how">Ver regras completas e rivais →</button>
+    </section>
+    <p class="fine">🎮 +18 · Jogue com responsabilidade · Depósito e saque via PIX</p>
+  </div>
+
+  <div class="lb-bottom">
+    <div class="stake-row">
+      <button id="stakeMinus" class="sbtn" aria-label="Diminuir">−</button>
+      <button id="stakeVal" class="stake-val"><small>APOSTA</small><span><span class="coin"></span><b id="stakeTxt">1,00</b></span><i>▼</i></button>
+      <button id="stakePlus" class="sbtn" aria-label="Aumentar">+</button>
+    </div>
+    <button id="btnBet" class="btn btn-play big"><span id="betLbl">APOSTAR</span></button>
+    <div class="row2"><button id="btnTrain" class="link">🎯 Treinar grátis</button><button id="btnRefill" class="link gold hidden">🎁 Recarga grátis +<b id="refillVal"></b></button></div>
+  </div>
+</section>
+
+<!-- ================= CARTEIRA ================= -->
+<section id="sheet-wallet" class="sheet">
+  <header class="sheet-h"><div class="ribbon">CARTEIRA</div><button class="round-btn red close" aria-label="Fechar">✕</button></header>
+  <div class="sheet-b">
+  <div class="wallet-bal">Saldo <b><span class="coin"></span> <span class="js-bal">0,00</span></b></div>
+  <div id="walletTabs" class="tabs">
+    <button class="tab on" data-w="dep">Depositar</button>
+    <button class="tab" data-w="saq">Sacar</button>
+    <button class="tab" data-w="ext">Extrato</button>
+  </div>
+
+  <div id="wDep" class="wtab form">
+    <div id="wDepForm">
+      <label><span>Valor do depósito</span><input id="wDepVal" inputmode="decimal" placeholder="R$ 20,00"></label>
+      <div id="wDepChips" class="chips wrap c"></div>
+      <p class="err" id="wDepErr" hidden></p>
+      <button id="wDepBtn" class="btn btn-play"><span>GERAR PIX</span></button>
+      <p class="note c" id="wDepMin"></p>
+    </div>
+    <div id="wDepPix" class="hidden">
+      <p class="note c">Escaneie o QR code ou copie o código PIX. Seu saldo entra <b>automaticamente</b> assim que o pagamento cair.</p>
+      <img id="wPixQr" class="pix-qr" alt="QR code PIX">
+      <div class="pix-copy"><input id="wPixCode" readonly><button id="wPixCopy" class="btn btn-2 small">Copiar</button></div>
+      <button id="wPixDone" class="btn btn-play"><span>JÁ PAGUEI — ATUALIZAR SALDO</span></button>
+      <button id="wDepBack" class="link">← Gerar outro valor</button>
+    </div>
+  </div>
+
+  <div id="wSaq" class="wtab form hidden">
+    <label><span>Valor do saque</span><input id="wSaqVal" inputmode="decimal" placeholder="R$ 50,00"></label>
+    <label><span>Chave PIX</span><input id="wSaqPix" autocapitalize="off" spellcheck="false" placeholder="CPF, e-mail, telefone ou aleatória"></label>
+    <label><span>CPF do titular</span><input id="wSaqCpf" inputmode="numeric" placeholder="000.000.000-00"></label>
+    <p class="err" id="wSaqErr" hidden></p>
+    <button id="wSaqBtn" class="btn btn-play"><span>SOLICITAR SAQUE</span></button>
+    <p class="note c" id="wSaqMin"></p>
+  </div>
+
+  <div id="wExt" class="wtab hidden">
+    <ul id="wExtList" class="rlist"></ul>
+    <p class="note c" id="wExtEmpty" hidden>Nenhuma movimentação ainda.</p>
+  </div>
+  </div>
+</section>
+
+<!-- ================= INDIQUE E GANHE ================= -->
+<section id="sheet-indicacao" class="sheet">
+  <header class="sheet-h"><div class="ribbon">INDIQUE E GANHE</div><button class="round-btn red close" aria-label="Fechar">✕</button></header>
+  <div class="sheet-b">
+    <p class="note c">Compartilhe seu link. Quando um amigo se cadastrar e depositar, você ganha comissão — <b>em até 3 níveis</b>.</p>
+    <div class="ind-levels">
+      <div class="ind-lv"><b id="indN1">—</b><small>Nível 1<br>direto</small></div>
+      <div class="ind-lv"><b id="indN2">—</b><small>Nível 2</small></div>
+      <div class="ind-lv"><b id="indN3">—</b><small>Nível 3</small></div>
+    </div>
+
+    <label class="ind-lbl">Seu link de indicação</label>
+    <div class="pix-copy"><input id="indLink" readonly value=""><button id="indCopy" class="btn btn-2 small">Copiar</button></div>
+    <button id="indShare" class="btn btn-play"><span>📲 COMPARTILHAR</span></button>
+    <p class="note c">Seu código: <b id="indCode">—</b></p>
+
+    <div class="ind-stats">
+      <div class="ind-st"><b id="indQtd">0</b><small>Indicados</small></div>
+      <div class="ind-st"><b id="indTotal">0,00</b><small>Comissão ganha</small></div>
+      <div class="ind-st"><b id="indSaldo">0,00</b><small>Saldo a sacar</small></div>
+    </div>
+
+    <div class="ind-saque">
+      <label class="ind-lbl">Sacar comissão (PIX)</label>
+      <input id="indSaqVal" inputmode="decimal" placeholder="Valor R$">
+      <input id="indSaqPix" autocapitalize="off" spellcheck="false" placeholder="Chave PIX">
+      <input id="indSaqCpf" inputmode="numeric" placeholder="CPF do titular">
+      <p class="err" id="indSaqErr" hidden></p>
+      <button id="indSaqBtn" class="btn btn-green"><span>SACAR COMISSÃO</span></button>
+      <p class="note c" id="indSaqMin"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PAINÉIS ================= -->
+<section id="sheet-char" class="sheet">
+  <header class="sheet-h"><div class="ribbon">SEU BONEQUINHO</div><button class="round-btn red close" aria-label="Fechar">✕</button></header>
+  <div class="char-prev-wrap">
+    <canvas id="charPrev"></canvas>
+    <button id="btnKidRandom" class="round-btn prev-l" aria-label="Aleatório">🎲</button>
+    <button id="btnKidDance" class="round-btn prev-r" aria-label="Ver dança">💃</button>
+  </div>
+  <div id="charTabs" class="icon-tabs">
+    <button data-t="rosto"><i>😃</i>Rosto</button>
+    <button data-t="cabelo"><i>💇</i>Cabelo</button>
+    <button data-t="roupa"><i>👕</i>Roupa</button>
+    <button data-t="acess"><i>🕶️</i>Acessórios</button>
+    <button data-t="carretel"><i>🧵</i>Carretel</button>
+    <button data-t="danca"><i>💃</i>Dança</button>
+  </div>
+  <div id="charBody" class="sheet-b char-body"></div>
+</section>
+
+<section id="sheet-how" class="sheet">
+  <header class="sheet-h"><div class="ribbon">COMO JOGAR</div><button class="round-btn red close" aria-label="Fechar">✕</button></header>
+  <div class="sheet-b">
+    <div class="how">
+      <div class="how-c"><i>💰</i><div><b>Aposte</b><p>Escolha o valor e comece. Você tem <b>uma pipa só</b>.</p></div></div>
+      <div class="how-c"><i>👆</i><div><b>Pilote</b><p>Arraste o dedo em qualquer lugar da tela. Nos Ajustes dá pra trocar para joystick ou seguir o dedo.</p></div></div>
+      <div class="how-c"><i>✂️</i><div><b>Cruze e rele</b><p>Passe sua linha sobre a do rival e mexa <b>rápido</b>. A barra verde/vermelha mostra quem está vencendo.</p></div></div>
+      <div class="how-c"><i>📈</i><div><b>Cada corte soma</b><p>Cada pipa cortada soma % da aposta. Aparar pipa caindo também soma.</p></div></div>
+      <div class="how-c"><i>🏦</i><div><b>Saque na hora certa</b><p><b>SACAR</b> garante o ganho. Se cortarem você antes, perde a aposta. Não dá pra sacar no meio de uma cruzada.</p></div></div>
+      <div class="how-c"><i>🌪️</i><div><b>O vento vira</b><p>Em cada rodada o servidor sorteia, antes de você soltar a pipa, o ponto em que <b>o vento vira</b>. Se seu acumulado chegar nele antes de você sacar, a linha arrebenta e você perde a aposta. O sorteio é <b>verificável</b> (provably fair) e devolve em média <b id="howRtp">96%</b> do apostado. Os rivais têm a mesma força em toda rodada.</p></div></div>
+      <div class="how-c"><i>⚡</i><div><b>Relada e chegada</b><p>A relada dá um tranco (corte x2,5). Entrar rápido na cruzada é <b>chegada</b>: corte instantâneo.</p></div></div>
+      <div class="how-c"><i>🌬️</i><div><b>Vento e chefões</b><p>Rajadas empurram todo mundo. A cada 5 ondas vem um chefão.</p></div></div>
+    </div>
+    <h4 class="sub">Rivais</h4>
+    <div id="rivals" class="rivals"></div>
+  </div>
+</section>
+
+<section id="sheet-settings" class="sheet">
+  <header class="sheet-h"><div class="ribbon">AJUSTES</div><button class="round-btn red close" aria-label="Fechar">✕</button></header>
+  <div class="sheet-b">
+    <div class="opts">
+      <label class="opt"><span>🎵 Música funk</span><input type="checkbox" id="optMusic"><i class="sw"></i></label>
+      <label class="opt"><span>🔊 Efeitos sonoros</span><input type="checkbox" id="optSfx"><i class="sw"></i></label>
+      <label class="opt"><span>📳 Vibração</span><input type="checkbox" id="optVib"><i class="sw"></i></label>
+      <div class="opt col"><span>👆 Controle da pipa</span>
+        <div id="optCtrl" class="seg"><button data-v="arrastar">Arrastar</button><button data-v="joystick">Joystick</button><button data-v="dedo">Seguir dedo</button></div>
+      </div>
+      <div class="opt col"><span>🎚️ Sensibilidade <b id="sensVal"></b></span><input type="range" id="optSens" min="1" max="2.8" step="0.1"></div>
+      <div class="opt col"><span>🎨 Estilo visual</span>
+        <div id="optStyle" class="seg"><button data-v="cartoon">Cartoon</button><button data-v="pixel">Pixel retrô</button></div>
+      </div>
+      <div class="opt col"><span>✨ Gráficos</span>
+        <div id="optFx" class="seg"><button data-v="alto">Completo</button><button data-v="baixo">Leve</button></div>
+      </div>
+      <button id="btnFs" class="btn btn-2">⛶ Tela cheia</button>
+    </div>
+    <div class="acc"><span>Conta: <b id="accName"></b></span><button id="btnLogout" class="btn btn-2 small">Sair</button></div>
+  </div>
+</section>
+
+<!-- ================= PAUSA ================= -->
+<section id="pause" class="screen center hidden">
+  <div class="panel">
+    <div class="ribbon">PAUSADO</div>
+    <p class="note c">A rodada continua aberta. Volte e saque quando quiser.</p>
+    <button id="btnResume" class="btn btn-play"><span>CONTINUAR</span></button>
+    <button id="pCash" class="btn btn-green"><span id="pCashLbl">SACAR</span></button>
+    <button id="pQuit" class="btn btn-2">SAIR DO TREINO</button>
+    <div class="row"><button id="pMusic" class="btn btn-2 small"></button><button id="pSfx" class="btn btn-2 small"></button></div>
+  </div>
+</section>
+
+<!-- ================= RESULTADO ================= -->
+<section id="result" class="screen center hidden"><div id="resBox" class="panel res"></div></section>
+
+<div id="busy" class="busy hidden"><div class="spin"></div><span id="busyTxt"></span></div>
+<div id="modal" class="modal hidden"><div id="modalCard" class="modal-card"></div></div>
+</div>
+
+<script type="module" src="js/main.js?v=d21"></script>
 </body>
 </html>

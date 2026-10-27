@@ -13,9 +13,9 @@ function sessionPayload(user) {
 }
 
 authRouter.post('/register', authLimiter, wrap(async (req, res) => {
-  const { name, phone, password, ref } = req.body ?? {};
-  const user = await register({ name, phone, password, ref });
-  await audit(null, { userId: user.id, action: 'register', meta: { ref: user.ref }, ip: ipOf(req) });
+  const { name, phone, password, ref, terms } = req.body ?? {};
+  const user = await register({ name, phone, password, ref, terms });
+  await audit(null, { userId: user.id, action: 'register', meta: { ref: user.ref, referred: !!user.referredBy, terms: user.termsVersion }, ip: ipOf(req) });
   issueSession(res, user);
   res.status(201).json(sessionPayload(user));
 }));

@@ -37,6 +37,7 @@ export function createApp() {
         defaultSrc: ["'self'"],
         imgSrc: ["'self'", 'data:'],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+        styleSrcAttr: ["'unsafe-inline'"], // style="--c:..." gerado pelo front (so atributos)
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],

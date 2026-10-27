@@ -29,6 +29,7 @@ export function lobby() {
     maps: MAPS,
     rtpPct: rtpBps / 100,
     maxMult: maxMultX100 / 100,
+    forca: CONFIG.game.forca,
     pct: Object.fromEntries(KINDS.map((k) => [k, pctX100[k] / 100])),
     betMinCents: CONFIG.limits.betMinCents,
     betMaxCents: CONFIG.limits.betMaxCents,

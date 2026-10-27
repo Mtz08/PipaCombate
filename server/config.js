@@ -77,7 +77,8 @@ export const CONFIG = {
     minCutIntervalMs: 250, // cortes mais rapidos que isso sao recusados (anti-automacao)
     // somado ao multiplicador a cada corte, por tipo (centesimos: 10 = +0,10x)
     pctX100: { moleque: 10, veloz: 15, aparador: 15, pesadao: 25, cortador: 20, chefe: 100, aparar: 5 },
-    maps: ['laje', 'praia', 'serra', 'cidade', 'deserto', 'tempestade'],
+    maps: ['laje', 'campinho', 'morro', 'praia', 'tempestade', 'noite'], // ids de public/js/data.js
+    forca: 1.4,            // forca das linhas rivais: a MESMA em toda rodada (ajusta a dificuldade)
     roundTtlMin: Number(env.ROUND_TTL_MIN) || 30, // round aberto alem disso e encerrado automaticamente
   },
 
@@ -85,6 +86,9 @@ export const CONFIG = {
   adminPhones: (env.ADMIN_PHONES || '').split(',').map((p) => p.replace(/\D/g, '')).filter(Boolean),
 
   signupBonusCents: Number(env.SIGNUP_BONUS_CENTS) || 0,
+
+  // Versao vigente dos termos de uso; troque ao publicar um texto novo.
+  termsVersion: env.TERMS_VERSION || '2026-10-27',
 };
 
 // Falha rapido em producao com configuracao insegura, em vez de subir vulneravel.

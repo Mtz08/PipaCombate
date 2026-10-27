@@ -3,6 +3,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
 import * as mock from './payments/mock.js';
+import { db } from './db/index.js';
+import { Users } from './db/repos.js';
 
 let server, base;
 before(() => new Promise((r) => { server = createApp().listen(0, () => { base = `http://127.0.0.1:${server.address().port}`; r(); }); }));
@@ -35,7 +37,7 @@ const newPhone = () => `11977${String(++phoneSeq).padStart(6, '0')}`;
 
 async function signedUp() {
   const c = client();
-  const r = await c('POST', '/api/auth/register', { name: 'Ana', phone: newPhone(), password: 'senha-forte-1' });
+  const r = await c('POST', '/api/auth/register', { name: 'Ana', phone: newPhone(), password: 'senha-forte-1', terms: true });
   assert.equal(r.status, 201);
   return c;
 }
@@ -94,7 +96,7 @@ test('cookie adulterado -> 401', async () => {
 test('login errado: mesma mensagem para telefone inexistente e senha errada', async () => {
   const c = client();
   const phone = newPhone();
-  await c('POST', '/api/auth/register', { name: 'Bia', phone, password: 'senha-forte-1' });
+  await c('POST', '/api/auth/register', { name: 'Bia', phone, password: 'senha-forte-1', terms: true });
   const wrongPw = await client()('POST', '/api/auth/login', { phone, password: 'outra-senha' });
   const noUser = await client()('POST', '/api/auth/login', { phone: newPhone(), password: 'outra-senha' });
   assert.equal(wrongPw.status, 401);
@@ -103,9 +105,35 @@ test('login errado: mesma mensagem para telefone inexistente e senha errada', as
 
 test('telefone repetido -> 409; senha curta -> 400', async () => {
   const phone = newPhone();
-  await client()('POST', '/api/auth/register', { name: 'Caio', phone, password: 'senha-forte-1' });
-  assert.equal((await client()('POST', '/api/auth/register', { name: 'Caio', phone, password: 'senha-forte-1' })).status, 409);
-  assert.equal((await client()('POST', '/api/auth/register', { name: 'Caio', phone: newPhone(), password: '123' })).status, 400);
+  await client()('POST', '/api/auth/register', { name: 'Caio', phone, password: 'senha-forte-1', terms: true });
+  assert.equal((await client()('POST', '/api/auth/register', { name: 'Caio', phone, password: 'senha-forte-1', terms: true })).status, 409);
+  assert.equal((await client()('POST', '/api/auth/register', { name: 'Caio', phone: newPhone(), password: '123', terms: true })).status, 400);
+});
+
+test('cadastro sem aceite dos termos -> 400 e nada e criado', async () => {
+  const phone = newPhone();
+  const r = await client()('POST', '/api/auth/register', { name: 'Duda', phone, password: 'senha-forte-1' });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error.code, 'TERMS_REQUIRED');
+  assert.equal(await Users.getByPhone(db, phone), null);
+});
+
+test('indicacao: codigo valido vincula o afiliado (sem diferenciar maiusculas); invalido so e ignorado', async () => {
+  const afiliado = client();
+  const a = await afiliado('POST', '/api/auth/register', { name: 'Afiliado', phone: newPhone(), password: 'senha-forte-1', terms: true });
+  const code = a.body.user.referralCode;
+
+  const ok = await client()('POST', '/api/auth/register', { name: 'Indicado', phone: newPhone(), password: 'senha-forte-1', terms: true, ref: code.toLowerCase() });
+  assert.equal(ok.status, 201);
+  const indicado = await Users.getById(db, ok.body.user.id);
+  assert.equal(indicado.referredBy, a.body.user.id);
+  assert.equal(indicado.ref, code);
+  assert.ok(indicado.termsAcceptedAt);
+  assert.ok(indicado.termsVersion);
+
+  const bad = await client()('POST', '/api/auth/register', { name: 'Sem Afiliado', phone: newPhone(), password: 'senha-forte-1', terms: true, ref: 'NAOEXISTE' });
+  assert.equal(bad.status, 201);
+  assert.equal((await Users.getById(db, bad.body.user.id)).referredBy, null);
 });
 
 test('webhook com assinatura invalida -> 401; JSON malformado -> 400', async () => {

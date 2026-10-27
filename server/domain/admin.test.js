@@ -17,7 +17,7 @@ before(() => new Promise((r) => { server = createApp().listen(0, () => { base = 
 after(() => new Promise((r) => server.close(r)));
 
 async function session(phone) {
-  const res = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ name: 'Adm', phone, password: 'senha-forte-1' }) });
+  const res = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ name: 'Adm', phone, password: 'senha-forte-1', terms: true }) });
   const cookie = res.headers.get('set-cookie').split(';')[0];
   return (path, opts = {}) => fetch(base + path, { ...opts, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', Cookie: cookie } });
 }

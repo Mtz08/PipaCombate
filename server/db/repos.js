@@ -11,6 +11,7 @@ export function mapUser(r) {
     id: r.id, name: r.name, phone: r.phone, passwordHash: r.password_hash, ref: r.ref,
     referralCode: r.referral_code, balanceCents: r.balance_cents,
     sessionVersion: r.session_version, createdAt: ms(r.created_at), role: r.role,
+    referredBy: r.referred_by ?? null, termsAcceptedAt: ms(r.terms_accepted_at), termsVersion: r.terms_version ?? null,
   };
 }
 
@@ -21,11 +22,14 @@ export const Users = {
   async getByPhone(q, phone) {
     return mapUser((await q.query('SELECT * FROM users WHERE phone = $1', [phone]))[0]) || null;
   },
-  async create(q, { name, phone, passwordHash, ref, referralCode }) {
+  async getByReferralCode(q, code) {
+    return mapUser((await q.query('SELECT * FROM users WHERE referral_code = $1', [code]))[0]) || null;
+  },
+  async create(q, { name, phone, passwordHash, ref, referralCode, referredBy = null, termsVersion = null }) {
     const rows = await q.query(
-      `INSERT INTO users (name, phone, password_hash, ref, referral_code)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [name, phone, passwordHash, ref, referralCode],
+      `INSERT INTO users (name, phone, password_hash, ref, referral_code, referred_by, terms_accepted_at, terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, $7) RETURNING *`,
+      [name, phone, passwordHash, ref, referralCode, referredBy, termsVersion],
     );
     return mapUser(rows[0]);
   },
