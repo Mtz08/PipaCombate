@@ -128,7 +128,7 @@ export const Api = {
     const j = await call('wallet');
     const tx = [
       ...(j.deposits || []).map((d) => ({ type: 'deposit', amountCents: d.amountCents, pos: true, at: d.createdAt, status: (DEP_ST[d.status] || ['PENDING'])[0], statusLabel: (DEP_ST[d.status] || [0, d.status])[1] })),
-      ...(j.withdrawals || []).map((w) => ({ type: 'withdraw', amountCents: w.amountCents, pos: false, at: w.createdAt, status: (SAQ_ST[w.status] || ['PENDING'])[0], statusLabel: (SAQ_ST[w.status] || [0, w.status])[1], note: w.note })),
+      ...(j.withdrawals || []).map((w) => ({ type: w.source === 'affiliate' ? 'withdraw_aff' : 'withdraw', amountCents: w.amountCents, pos: false, at: w.createdAt, status: (SAQ_ST[w.status] || ['PENDING'])[0], statusLabel: (SAQ_ST[w.status] || [0, w.status])[1], note: w.note })),
       ...(j.ledger || []).filter((t) => LEDGER_SHOWN.includes(t.type)).map((t) => ({
         type: t.type, amountCents: Math.abs(t.deltaCents), pos: t.deltaCents > 0, at: t.at, status: 'COMPLETED', statusLabel: '',
       })),
@@ -156,11 +156,21 @@ export const Api = {
 
   /* ---- indique e ganhe (afiliados entram na Fase 5) ---- */
   async indicacao() {
-    const s = fromSession(await call('auth/me'));
-    const codigo = s.user.referralCode || '';
-    return { codigo, link: location.origin + '/cadastro?ref=' + codigo };
+    const j = await call('indicacao/info');
+    const reais = (c) => 'R$ ' + (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: c % 100 ? 2 : 0 });
+    const n = j.indicados || {};
+    return {
+      ativo: j.ativo, modelo: j.modelo, codigo: j.codigo,
+      link: location.origin + '/cadastro?ref=' + j.codigo,
+      // rótulo de cada nível: "10%" (depósito/revshare) ou "R$ 15" (CPA)
+      niveisLabel: (j.niveis || []).map((x) => (x.tipo === 'valor' ? reais(x.cents) : x.pct + '%')),
+      cpaDepositoMinCents: j.cpaDepositoMinCents,
+      n1Count: n.n1, n2Count: n.n2, n3Count: n.n3,
+      totalCommissionCents: j.ganhoCents, affiliateBalanceCents: j.saldoCents,
+      saqueMinCents: j.saqueMinCents, saqueMaxCents: j.saqueMaxCents,
+    };
   },
-  withdrawAffiliate: () => Promise.reject(Object.assign(new Error('Saque de comissão disponível em breve.'), { status: 400 })),
+  withdrawAffiliate: (amountCents, pixKey, cpf) => post('wallet/withdraw-affiliate', { amountCents, pixKey, cpf }),
   refill: () => Promise.reject(Object.assign(new Error('Recarga indisponível.'), { status: 400 })),
 };
 

@@ -17,6 +17,7 @@ import { domainError } from '../util/money.js';
 import { CONFIG } from '../config.js';
 import { applyCredit, applyDebit } from './wallet.js';
 import { activeSeed, windPoint } from './fairness.js';
+import { onRoundClosed } from './affiliates.js';
 
 const { rtpBps, maxMultX100, pctX100, maps: MAPS } = CONFIG.game;
 export const KINDS = Object.keys(pctX100);
@@ -76,7 +77,7 @@ export async function start(userId, { betCents, map }) {
 /** Registra uma pipa cortada/aparada. Sobe o multiplicador ou o vento vira. */
 export async function cut(userId, roundId, { kind } = {}) {
   if (!KINDS.includes(kind)) throw domainError('INVALID_KIND', 'Tipo de corte invalido');
-  return withUserLock(userId, async (t) => {
+  return withUserLock(userId, async (t, user) => {
     const round = await requireOpenRound(t, userId, roundId);
     // le CONFIG na hora (ajustavel em teste); relogio do banco pode estar ~1ms a frente
     const minGap = CONFIG.game.minCutIntervalMs;
@@ -87,6 +88,7 @@ export async function cut(userId, roundId, { kind } = {}) {
     if (next >= round.ceilingX100) {
       await Rounds.recordCut(t, round.id, kind, next);
       const closed = await Rounds.close(t, round.id, 'lost', 0, 'wind');
+      await onRoundClosed(t, user, { roundId: round.id, betCents: round.betCents, prizeCents: 0 });
       return { round: viewRound(closed), wind: true };
     }
     return { round: viewRound(await Rounds.recordCut(t, round.id, kind, next)), wind: false };
@@ -102,6 +104,7 @@ export async function cashout(userId, roundId) {
     const balanceAfter = await applyCredit(t, user, prizeCents, 'prize', {
       roundId: round.id, multiplier: round.multX100 / 100,
     });
+    await onRoundClosed(t, user, { roundId: round.id, betCents: round.betCents, prizeCents });
     return { round: viewRound(closed), prizeCents, balanceCents: balanceAfter };
   });
 }
@@ -109,10 +112,12 @@ export async function cashout(userId, roundId) {
 /** Fim sem premio: rival cortou a pipa ('cut') ou desistencia ('forfeit'). */
 export async function lose(userId, roundId, { reason } = {}) {
   const endReason = reason === 'cut' ? 'cut' : 'forfeit';
-  return withUserLock(userId, async (t) => {
+  return withUserLock(userId, async (t, user) => {
     const round = await requireRound(t, userId, roundId);
     if (round.state !== 'open') return { round: viewRound(round) };
-    return { round: viewRound(await Rounds.close(t, round.id, 'lost', 0, endReason)) };
+    const closed = await Rounds.close(t, round.id, 'lost', 0, endReason);
+    await onRoundClosed(t, user, { roundId: round.id, betCents: round.betCents, prizeCents: 0 });
+    return { round: viewRound(closed) };
   });
 }
 

@@ -4,6 +4,10 @@ import { requireAdmin } from '../middleware/session.js';
 import * as Admin from '../domain/admin.js';
 import { ipOf } from '../domain/audit.js';
 import { reviewQueue, approveWithdrawal, rejectWithdrawal } from '../domain/payments.js';
+import { getSetting, setSetting, SCHEMAS } from '../domain/settings.js';
+import { adminStats as affiliateStats } from '../domain/affiliates.js';
+import { audit } from '../domain/audit.js';
+import { domainError } from '../util/money.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAdmin);
@@ -19,4 +23,15 @@ adminRouter.get('/audit', wrap(async (req, res) => res.json({ entries: await Adm
 adminRouter.get('/withdrawals', wrap(async (_req, res) => res.json({ withdrawals: await reviewQueue() })));
 adminRouter.post('/withdrawals/:id/approve', wrap(async (req, res) => res.json(await approveWithdrawal(req.user, req.params.id, ipOf(req)))));
 adminRouter.post('/withdrawals/:id/reject', wrap(async (req, res) => res.json(await rejectWithdrawal(req.user, req.params.id, req.body ?? {}, ipOf(req)))));
+// configuracoes editaveis (hoje: afiliados)
+adminRouter.get('/settings/:key', wrap(async (req, res) => {
+  if (!SCHEMAS[req.params.key]) throw domainError('NOT_FOUND', 'Configuracao inexistente', 404);
+  res.json({ value: await getSetting(req.params.key) });
+}));
+adminRouter.post('/settings/:key', wrap(async (req, res) => {
+  const value = await setSetting(req.params.key, req.body?.value, req.user.id);
+  await audit(null, { actorId: req.user.id, action: 'settings_update', meta: { key: req.params.key, value }, ip: ipOf(req) });
+  res.json({ value });
+}));
+adminRouter.get('/affiliates', wrap(async (_req, res) => res.json(await affiliateStats())));
 adminRouter.post('/expire-rounds', wrap(async (_req, res) => res.json({ expired: await Admin.expireRounds() })));

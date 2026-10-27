@@ -157,6 +157,9 @@ const mapCharge = (r) => r && {
 };
 
 export const Charges = {
+  async hasPaid(q, userId) {
+    return (await q.query("SELECT 1 FROM charges WHERE user_id = $1 AND status = 'paid' LIMIT 1", [userId])).length > 0;
+  },
   async recentByUser(q, userId, limit = 20) {
     return (await q.query('SELECT * FROM charges WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2', [userId, limit])).map(mapCharge);
   },
@@ -195,7 +198,7 @@ export const Charges = {
 
 const mapWithdrawal = (r) => r && {
   id: r.id, userId: r.user_id, amountCents: r.amount_cents, status: r.status,
-  pixKey: r.pix_key, pixKeyMask: r.pix_key_mask, providerRef: r.provider_ref, cpfEnc: r.cpf_enc ?? null,
+  pixKey: r.pix_key, pixKeyMask: r.pix_key_mask, providerRef: r.provider_ref, cpfEnc: r.cpf_enc ?? null, source: r.source || 'balance',
   reviewedBy: r.reviewed_by ?? null, reviewedAt: ms(r.reviewed_at), reviewNote: r.review_note ?? null,
   createdAt: ms(r.created_at), updatedAt: ms(r.updated_at),
 };
@@ -204,11 +207,11 @@ export const Withdrawals = {
   async get(q, id, { forUpdate = false } = {}) {
     return mapWithdrawal((await q.query(`SELECT * FROM withdrawals WHERE id = $1${forUpdate ? ' FOR UPDATE' : ''}`, [id]))[0]) || null;
   },
-  async create(q, { userId, amountCents, pixKey, pixKeyMask, provider, status = 'processing', cpfEnc = null }) {
+  async create(q, { userId, amountCents, pixKey, pixKeyMask, provider, status = 'processing', cpfEnc = null, source = 'balance' }) {
     return mapWithdrawal((await q.query(
-      `INSERT INTO withdrawals (user_id, amount_cents, pix_key, pix_key_mask, provider, status, cpf_enc)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [userId, amountCents, pixKey, pixKeyMask, provider, status, cpfEnc],
+      `INSERT INTO withdrawals (user_id, amount_cents, pix_key, pix_key_mask, provider, status, cpf_enc, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [userId, amountCents, pixKey, pixKeyMask, provider, status, cpfEnc, source],
     ))[0]);
   },
   /** Atualiza status; ao finalizar (paid/failed/rejected) apaga chave e CPF (LGPD). */

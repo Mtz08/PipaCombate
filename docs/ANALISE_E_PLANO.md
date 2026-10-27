@@ -184,7 +184,9 @@ Pendente para a Fase 6: limites (mín./máx./auto) editáveis pelo painel; hoje 
 - Solicitação de saque (chave PIX + CPF validado) com aprovação no admin.
 - Limites mínimo e máximo configuráveis.
 
-### Fase 5: Indique e ganhe
+### Fase 5: Indique e ganhe ✅ concluída em 27/10/2026
+Feito: comissão em até 3 níveis com modelo escolhido no admin (CPA fixo no 1º depósito acima do mínimo, % de cada depósito ou RevShare do resultado da casa); extrato do afiliado só com inserções (`affiliate_ledger`, sem travar a conta do afiliado); saque de comissão pelo mesmo fluxo de aprovação (`withdrawals.source = 'affiliate'`); tela "Indique e ganhe" com níveis, indicados, ganhos e saldo reais; configurações editáveis pelo painel (tabela `settings`, com validação e auditoria). Migração `007_afiliados.sql`. 52/52 testes.
+
 - Código por usuário, link `/cadastro?ref=CODIGO` e atribuição no cadastro.
 - Regra de comissão (a definir: % do depósito ou da receita líquida) e saldo de afiliado separado.
 - Saque de afiliado com o mesmo fluxo de aprovação.
@@ -199,14 +201,23 @@ Pendente para a Fase 6: limites (mín./máx./auto) editáveis pelo painel; hoje 
 - Manifesto PWA, ícones e tela cheia.
 - Textos honestos: nada de "moedas fictícias" se o saldo for real.
 
-### Fase 8: Pagamentos (por último)
+### Fase 8: Segurança (pedida em 27/10/2026, antes do pagamento)
+Proteger o site com tudo o que der, antes de existir dinheiro real circulando:
+- Revisão de segurança de todo o código (servidor e front), com correção do que aparecer.
+- Contas: senha forte, bloqueio progressivo de login, sessões (listar e encerrar), 2FA para admin.
+- Antifraude: multi-contas (mesmo aparelho/IP/CPF), autoindicação, bots e scripts no jogo (validação de cortes, limites de velocidade), abuso de bônus e de comissão.
+- API: rate limit por rota e por usuário, validação de entrada, CSRF, CORS, cabeçalhos e CSP revisados, logs de segurança e alertas.
+- Dados: segredos fora do código, cifra em repouso do que for sensível, backup cifrado, LGPD.
+- Infra (preparo para o lançamento): Cloudflare WAF/anti-DDoS, HTTPS estrito, servidor sem portas abertas além do necessário, dependências auditadas.
+
+### Fase 9: Pagamentos (por último)
 **Pré-requisito: operação autorizada (seção 6).**
 - Integrar o gateway PIX escolhido: cobrança, webhook assinado, idempotência e conciliação.
 - PIX de saída para os saques, com verificação de que o CPF da conta é o do titular.
 - Testes de ponta a ponta no sandbox do gateway.
 
-### Fase 9: Endurecimento e lançamento
-- Revisão de segurança, carga, backup e restauração do banco, logs e alertas.
+### Fase 10: Lançamento
+- Carga, backup e restauração do banco, logs e alertas.
 - Cloudflare na frente (como o antigo), domínio `pipacombate.online` e migração de DNS.
 - **Deixado para o lançamento:** recuperar as contas da Hostinger (registrador, domínio válido até 19/10/2027) e da Cloudflare (DNS), criar a conta e a VM na Oracle Cloud Always Free e rodar `deploy/oracle/setup.sh`.
 

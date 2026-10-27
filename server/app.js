@@ -20,6 +20,7 @@ import { publicRouter } from './routes/public.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { fairRouter } from './routes/fair.js';
 import { adminRouter } from './routes/admin.js';
+import { indicacaoRouter } from './routes/indicacao.js';
 import { requestLog } from './util/log.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,7 @@ export function createApp() {
   api.use('/wallet', walletRouter);
   api.use('/fair', fairRouter);
   api.use('/admin', adminRouter);
+  api.use('/indicacao', indicacaoRouter);
   api.use(notFound);
   app.use('/api', api);
 

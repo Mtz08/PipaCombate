@@ -1455,7 +1455,7 @@ async function loadExtrato() {
     const j = await Api.wallet();
     if (typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
     const tx = j.transactions || [];
-    const label = { deposit: 'Depósito', withdraw: 'Saque', withdrawal: 'Saque', bonus: 'Bônus', commission: 'Comissão', adjust: 'Ajuste' };
+    const label = { deposit: 'Depósito', withdraw: 'Saque', withdraw_aff: 'Saque de comissão', withdrawal: 'Saque', bonus: 'Bônus', commission: 'Comissão', adjust: 'Ajuste' };
     const st = { COMPLETED: 'ok', PAID: 'ok', PENDING: 'pend', FAILED: 'fail', CANCELED: 'fail', REJECTED: 'fail' };
     $('#wExtEmpty').hidden = tx.length > 0;
     $('#wExtList').innerHTML = tx.map(t => {
@@ -1569,13 +1569,17 @@ function renderIndicacao() {
     indInfo = j;
     $('#indLink').value = j.link || '';
     $('#indCode').textContent = j.codigo || '—';
-    $('#indN1').textContent = j.comissao_nivel1_perc != null ? j.comissao_nivel1_perc + '%' : '—';
-    $('#indN2').textContent = j.comissao_nivel2_perc != null ? j.comissao_nivel2_perc + '%' : '—';
-    $('#indN3').textContent = j.comissao_nivel3_perc != null ? j.comissao_nivel3_perc + '%' : '—';
+    const lv = j.niveisLabel || [];
+    ['#indN1', '#indN2', '#indN3'].forEach((id, i) => { $(id).textContent = lv[i] || '—'; });
+    const fmtMin = j.cpaDepositoMinCents ? ' de pelo menos R$ ' + money(j.cpaDepositoMinCents) : '';
+    $('#indTxt').innerHTML = !j.ativo ? 'O programa de indicação está pausado no momento.'
+      : j.modelo === 'cpa' ? `Compartilhe seu link. Você ganha um valor fixo quando seu indicado faz o <b>primeiro depósito</b>${fmtMin} — <b>em até 3 níveis</b>.`
+      : j.modelo === 'revshare' ? 'Compartilhe seu link. Você ganha uma parte do que a casa fatura com as rodadas dos seus indicados — <b>em até 3 níveis</b>.'
+      : 'Compartilhe seu link. Você ganha uma parte de <b>cada depósito</b> dos seus indicados — <b>em até 3 níveis</b>.';
     $('#indQtd').textContent = (j.n1Count || 0) + (j.n2Count || 0) + (j.n3Count || 0);
     $('#indTotal').textContent = money(j.totalCommissionCents || 0);
     $('#indSaldo').textContent = money(j.affiliateBalanceCents || 0);
-    $('#indSaqMin').textContent = 'mín. R$ ' + money((j.saque_afiliado_minimo || 0) * 100) + ' · saldo ' + money(j.affiliateBalanceCents || 0);
+    $('#indSaqMin').textContent = 'mín. R$ ' + money(j.saqueMinCents || 0) + ' · saldo ' + money(j.affiliateBalanceCents || 0);
   }).catch(e => apiError(e));
 }
 async function copyText(val, okMsg) {

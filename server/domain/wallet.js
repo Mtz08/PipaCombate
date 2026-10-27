@@ -10,7 +10,7 @@ import { db, withUserLock } from '../db/index.js';
 import { Users, Ledger, Withdrawals, Charges } from '../db/repos.js';
 import { domainError } from '../util/money.js';
 
-const viewWithdrawalRow = (w) => ({ id: w.id, amountCents: w.amountCents, status: w.status, pixKeyMask: w.pixKeyMask, createdAt: w.createdAt, note: w.reviewNote });
+const viewWithdrawalRow = (w) => ({ id: w.id, amountCents: w.amountCents, status: w.status, pixKeyMask: w.pixKeyMask, createdAt: w.createdAt, note: w.reviewNote, source: w.source });
 
 function assertAmount(amountCents) {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {

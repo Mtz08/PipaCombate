@@ -40,6 +40,14 @@ walletRouter.get('/withdraw-info', (_req, res) => res.json({
   autoMaxCents: CONFIG.limits.withdrawAutoMaxCents, // acima disso, passa por aprovacao
 }));
 
+// saque do saldo de comissao (indique e ganhe); mesmo fluxo de aprovacao
+walletRouter.post('/withdraw-affiliate', wrap(async (req, res) => {
+  const { amountCents, pixKey, cpf } = req.body ?? {};
+  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, source: 'affiliate' });
+  await audit(null, { userId: req.user.id, action: 'withdraw_affiliate', meta: { withdrawalId: r.withdrawal.id, amountCents: r.withdrawal.amountCents, pixKeyMask: r.withdrawal.pixKeyMask }, ip: ipOf(req) });
+  res.status(201).json(r);
+}));
+
 walletRouter.post('/withdraw', wrap(async (req, res) => {
   const { amountCents, pixKey, cpf } = req.body ?? {};
   const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf }).catch(async (err) => {

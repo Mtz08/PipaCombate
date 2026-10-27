@@ -23,13 +23,51 @@ async function boot() {
     <section class="card"><h2>Saques para aprovar <small id="wqN"></small></h2>
       <p class="hint">O valor ja saiu do saldo do jogador. Aprovar envia o PIX; recusar devolve o valor ao saldo.</p>
       <ul id="wq" class="ledger"></ul><p id="wqMsg" class="msg"></p></section>
+    <section class="card"><h2>Indique e ganhe</h2><div id="affStats" class="grid"></div>
+      <form id="affForm" class="aff-form">
+        <label class="check"><input type="checkbox" name="ativo"> Programa ativo</label>
+        <label>Modelo <select name="modelo">
+          <option value="deposito">% de cada depósito do indicado</option>
+          <option value="cpa">CPA: valor fixo no 1º depósito</option>
+          <option value="revshare">RevShare: % do resultado da casa</option></select></label>
+        <div class="row" data-m="pct"><b>% por nível</b><input name="p1" type="number" min="0" max="50"><input name="p2" type="number" min="0" max="50"><input name="p3" type="number" min="0" max="50"></div>
+        <div class="row" data-m="cpa"><b>CPA R$ por nível</b><input name="c1" type="number" min="0" step="0.01"><input name="c2" type="number" min="0" step="0.01"><input name="c3" type="number" min="0" step="0.01"></div>
+        <div class="row" data-m="cpa"><b>Depósito mínimo p/ CPA (R$)</b><input name="cpaMin" type="number" min="0" step="0.01"></div>
+        <div class="row"><b>Saque de comissão R$ mín/máx</b><input name="sMin" type="number" min="1" step="0.01"><input name="sMax" type="number" min="1" step="0.01"></div>
+        <button class="primary" type="submit">Salvar</button><p id="affMsg" class="msg"></p>
+      </form></section>
     <section class="card"><h2>Jogadores</h2>
       <div class="row"><input id="q" placeholder="Telefone ou nome"><button id="btnQ">Buscar</button></div>
       <ul id="users" class="ledger"></ul><div id="detail"></div></section>
     <section class="card"><h2>Auditoria</h2><ul id="audit" class="ledger"></ul></section>`;
   $('#btnQ').onclick = search; $('#q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
   $('#btnExpire').onclick = async () => { const r = await api('expire-rounds', {}); alert(`${r.expired} round(s) encerrado(s).`); stats(); };
-  stats(); search(); audit(); withdrawals();
+  stats(); search(); audit(); withdrawals(); affiliates();
+}
+
+const reais = (c) => (c / 100).toFixed(2), cents = (v) => Math.round(parseFloat(String(v).replace(',', '.')) * 100) || 0;
+async function affiliates() {
+  const [{ value: v }, s] = await Promise.all([api('settings/afiliados'), api('affiliates')]);
+  const cell = (k, x) => `<div><small>${k}</small><b>${x}</b></div>`;
+  $('#affStats').innerHTML = [cell('Afiliados com comissão', s.afiliados), cell('Jogadores indicados', s.indicados), cell('Comissões geradas', brl(s.comissoesCents)), cell('Comissões sacadas', brl(s.sacadoCents))].join('');
+  const f = $('#affForm');
+  f.ativo.checked = v.ativo; f.modelo.value = v.modelo;
+  [f.p1.value, f.p2.value, f.p3.value] = v.niveisPct;
+  [f.c1.value, f.c2.value, f.c3.value] = v.cpaCents.map(reais);
+  f.cpaMin.value = reais(v.cpaDepositoMinCents); f.sMin.value = reais(v.saqueMinCents); f.sMax.value = reais(v.saqueMaxCents);
+  const show = () => f.querySelectorAll('[data-m]').forEach((el) => { el.hidden = el.dataset.m === 'cpa' ? f.modelo.value !== 'cpa' : f.modelo.value === 'cpa'; });
+  f.modelo.onchange = show; show();
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const value = {
+      ativo: f.ativo.checked, modelo: f.modelo.value,
+      niveisPct: [f.p1.value, f.p2.value, f.p3.value].map(Number),
+      cpaCents: [f.c1.value, f.c2.value, f.c3.value].map(cents),
+      cpaDepositoMinCents: cents(f.cpaMin.value), saqueMinCents: cents(f.sMin.value), saqueMaxCents: cents(f.sMax.value),
+    };
+    try { await api('settings/afiliados', { value }); $('#affMsg').textContent = 'Salvo. Vale para os próximos depósitos e rodadas.'; audit(); }
+    catch (err) { $('#affMsg').textContent = err.message; }
+  };
 }
 
 async function withdrawals() {

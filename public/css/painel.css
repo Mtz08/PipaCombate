@@ -131,3 +131,7 @@ button.ghost { background: transparent; border: 1px solid var(--line); color: va
 @media (prefers-reduced-motion: reduce) {
   button { transition: none; }
 }
+.aff-form{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.aff-form .row b{min-width:180px;font-size:.85rem;color:var(--mut)}
+.aff-form .row input{max-width:90px}
+.aff-form select{width:100%;padding:10px;border-radius:10px;background:var(--bg2);color:var(--fg);border:1px solid var(--line)}

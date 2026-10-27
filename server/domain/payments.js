@@ -22,6 +22,7 @@ import { assertCpf, normalizePixKey, maskPixKey } from '../util/validate.js';
 import { seal, open, cpfHash } from '../util/crypto.js';
 import { audit } from './audit.js';
 import { applyCredit, applyDebit } from './wallet.js';
+import * as Affiliates from './affiliates.js';
 
 // ---------- Deposito ----------
 
@@ -64,7 +65,9 @@ export async function confirmDeposit({ providerRef, amountCents }) {
     if (amountCents !== charge.amountCents) {
       return { charge: await Charges.setStatus(t, charge.id, 'review'), review: true };
     }
+    const first = !(await Charges.hasPaid(t, charge.userId));
     const balanceCents = await applyCredit(t, user, charge.amountCents, 'deposit', { chargeId: charge.id });
+    await Affiliates.onDeposit(t, user, { amountCents: charge.amountCents, chargeId: charge.id, first });
     return { charge: await Charges.setStatus(t, charge.id, 'paid'), balanceCents };
   });
 }
@@ -81,10 +84,13 @@ export function viewCharge(c) {
 
 // ---------- Saque ----------
 
-export async function requestWithdrawal(userId, { amountCents, pixKey, cpf }) {
+/** source: 'balance' (saldo de jogo) ou 'affiliate' (saldo de comissao). */
+export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, source = 'balance' }) {
   const key = normalizePixKey(pixKey);
   const doc = assertCpf(cpf); // nunca em claro no banco (LGPD): so cifrado enquanto espera aprovacao
-  assertCentsInRange(amountCents, CONFIG.limits.withdrawMinCents, CONFIG.limits.withdrawMaxCents, 'saque');
+  const fromAff = source === 'affiliate';
+  if (!fromAff) assertCentsInRange(amountCents, CONFIG.limits.withdrawMinCents, CONFIG.limits.withdrawMaxCents, 'saque');
+  else if (!Number.isInteger(amountCents) || amountCents <= 0) throw domainError('INVALID_AMOUNT', 'Valor invalido');
   const review = amountCents > CONFIG.limits.withdrawAutoMaxCents;
 
   const { withdrawal, balanceCents } = await withUserLock(userId, async (t, user) => {
@@ -98,15 +104,26 @@ export async function requestWithdrawal(userId, { amountCents, pixKey, cpf }) {
     if (!user.cpfHash) await Users.setCpfHash(t, userId, h);
     const w = await Withdrawals.create(t, {
       userId, amountCents, pixKey: key, pixKeyMask: maskPixKey(key), provider: CONFIG.payments.provider,
-      status: review ? 'review' : 'processing', cpfEnc: review ? seal(doc) : null,
+      status: review ? 'review' : 'processing', cpfEnc: review ? seal(doc) : null, source: fromAff ? 'affiliate' : 'balance',
     });
-    const bal = await applyDebit(t, user, amountCents, 'withdraw', { withdrawalId: w.id, pixKeyMask: w.pixKeyMask });
-    return { withdrawal: w, balanceCents: bal };
+    const meta = { withdrawalId: w.id, pixKeyMask: w.pixKeyMask };
+    if (fromAff) {
+      const affiliateBalanceCents = await Affiliates.debitForWithdraw(t, userId, amountCents, meta);
+      return { withdrawal: w, balanceCents: user.balanceCents, affiliateBalanceCents };
+    }
+    return { withdrawal: w, balanceCents: await applyDebit(t, user, amountCents, 'withdraw', meta) };
   });
 
-  if (review) return { withdrawal: viewWithdrawal(withdrawal), balanceCents };
+  const extra = fromAff ? { affiliateBalanceCents: (await Affiliates.balanceOf(db, userId)) } : {};
+  if (review) return { withdrawal: viewWithdrawal(withdrawal), balanceCents, ...extra };
   const done = await sendToPsp(withdrawal, key, doc);
-  return { withdrawal: viewWithdrawal(done), balanceCents };
+  return { withdrawal: viewWithdrawal(done), balanceCents, ...extra };
+}
+
+/** Devolve o valor de um saque que nao saiu, para o saldo de onde veio. */
+async function refund(t, user, w, meta) {
+  if (w.source === 'affiliate') { await Affiliates.refundWithdraw(t, w.userId, w.amountCents, meta); return user.balanceCents; }
+  return applyCredit(t, user, w.amountCents, 'withdraw_reversal', meta);
 }
 
 /** Pede a transferencia ao PSP; se recusar, marca 'failed' e estorna. */
@@ -117,7 +134,7 @@ async function sendToPsp(withdrawal, pixKey, cpf) {
   } catch {
     const bal = await withUserLock(withdrawal.userId, async (t, user) => {
       await Withdrawals.finish(t, withdrawal.id, { status: 'failed' });
-      return applyCredit(t, user, withdrawal.amountCents, 'withdraw_reversal', { withdrawalId: withdrawal.id });
+      return refund(t, user, withdrawal, { withdrawalId: withdrawal.id });
     });
     throw Object.assign(domainError('WITHDRAW_FAILED', 'Saque nao processado. Valor devolvido ao saldo.', 502), { balanceCents: bal });
   }
@@ -138,8 +155,7 @@ export async function rejectWithdrawal(admin, withdrawalId, { note } = {}, ip) {
   const why = String(note ?? '').trim().slice(0, 200);
   if (why.length < 5) throw domainError('REASON_REQUIRED', 'Informe o motivo (min. 5 caracteres)');
   const w = await claimForReview(admin, withdrawalId, 'rejected', why);
-  const balanceCents = await withUserLock(w.userId, (t, user) =>
-    applyCredit(t, user, w.amountCents, 'withdraw_reversal', { withdrawalId: w.id, reason: why }));
+  const balanceCents = await withUserLock(w.userId, (t, user) => refund(t, user, w, { withdrawalId: w.id, reason: why }));
   await audit(null, { userId: w.userId, actorId: admin.id, action: 'withdraw_rejected', meta: { withdrawalId: w.id, amountCents: w.amountCents, reason: why }, ip });
   return { withdrawal: viewWithdrawal({ ...w, status: 'rejected', reviewNote: why }), balanceCents };
 }
@@ -169,5 +185,5 @@ export async function reviewQueue() {
 }
 
 export function viewWithdrawal(w) {
-  return { id: w.id, amountCents: w.amountCents, status: w.status, pixKeyMask: w.pixKeyMask, createdAt: w.createdAt ?? null, note: w.reviewNote ?? null };
+  return { id: w.id, amountCents: w.amountCents, status: w.status, pixKeyMask: w.pixKeyMask, createdAt: w.createdAt ?? null, note: w.reviewNote ?? null, source: w.source || 'balance' };
 }
