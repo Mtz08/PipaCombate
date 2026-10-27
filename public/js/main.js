@@ -1480,6 +1480,8 @@ $('#wDepBtn').onclick = async () => {
   btn.disabled = true; btn.classList.add('loading');
   try {
     const j = await Api.deposit(cents);
+    pixelEv('iniciou_deposito', { reais: cents / 100 });
+    pendingDep = { id: j.id, cents };
     if (j.pixCode) {
       $('#wPixCode').value = j.pixCode;
       $('#wPixQr').src = j.qrcode || '';
@@ -1491,6 +1493,7 @@ $('#wDepBtn').onclick = async () => {
     } else {
       // deposito auto-confirmado (modo dev): já creditou
       if (typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
+      depositConfirmed();
       toast('💰 Depósito confirmado!', 'green'); closeSheets(true);
     }
   } catch (e) { err.textContent = e.message; err.hidden = false; Sound.deny(); }
@@ -1513,6 +1516,14 @@ $('#wPixCopy').onclick = async () => {
 $('#wDepBack').onclick = () => { wDepShowForm(); Sound.back(); };
 $('#wPixDone').onclick = () => checkDeposit(true);
 
+/* pixels de marketing (só disparam com consentimento; ver js/pixels.js) */
+function pixelEv(ev, d) { try { if (window.PCPixel) window.PCPixel.track(ev, d); } catch (e) {} }
+let pendingDep = null;
+function depositConfirmed() {
+  if (!pendingDep) return;
+  pixelEv('deposito', { reais: pendingDep.cents / 100, id: pendingDep.id });
+  pendingDep = null;
+}
 function startDepositPoll() {
   stopDepositPoll();
   const before = acct.balance;
@@ -1521,7 +1532,7 @@ function startDepositPoll() {
       const j = await Api.wallet();
       if (typeof j.balanceCents === 'number' && j.balanceCents > before) {
         acct.balance = j.balanceCents; updBalance();
-        stopDepositPoll();
+        stopDepositPoll(); depositConfirmed();
         toast('💰 Depósito recebido!', 'green'); confettiBurst(); Sound.cheer(1);
         closeSheets(true);
       }
@@ -1534,7 +1545,7 @@ async function checkDeposit(manual) {
     const before = acct.balance;
     if (typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
     if (manual) {
-      if (acct.balance > before) { stopDepositPoll(); toast('💰 Depósito recebido!', 'green'); confettiBurst(); closeSheets(true); }
+      if (acct.balance > before) { stopDepositPoll(); depositConfirmed(); toast('💰 Depósito recebido!', 'green'); confettiBurst(); closeSheets(true); }
       else toast('Ainda não caiu. Assim que o PIX for pago, seu saldo entra sozinho.', '');
     }
   } catch (e) { apiError(e); }
@@ -1664,6 +1675,7 @@ $('#fReg').addEventListener('submit', async e => {
     const j = await Api.register(nome, fone, f.password.value, f.ref.value.trim());
     Auth.set(j.token, j.user); f.reset();
     try { localStorage.removeItem(REF_KEY); } catch (e) {}
+    pixelEv('cadastro');
     enterLobby(`Conta criada! Bem-vindo, <b>${esc(j.user.username)}</b> 🎉`);
     confettiBurst(); Sound.cheer(1);
     setTimeout(() => openSheet('char'), 900);
@@ -1676,6 +1688,29 @@ function enterLobby(msg) {
   renderLobby(); refreshLobby();
   if (msg) toast(msg, 'gold');
   Sound.music('menu'); Sound.crowdAmb(0);
+  if (window.PCConfig) window.PCConfig.then(c => showPopup(c && c.popup)).catch(() => {});
+}
+
+/* Popup de aviso configurado no painel. frequencia: sessao | diaria | sempre */
+let popupShown = false;
+function showPopup(p) {
+  if (!p || !p.ativo || popupShown || state !== 'lobby') return;
+  const key = 'pc_popup_' + [p.titulo, p.mensagem, p.imagemUrl].join('|').length + '_' + (p.titulo || '').slice(0, 20);
+  try {
+    if (p.frequencia === 'sessao' && sessionStorage.getItem(key)) return;
+    if (p.frequencia === 'diaria' && localStorage.getItem(key) === new Date().toDateString()) return;
+    sessionStorage.setItem(key, '1'); localStorage.setItem(key, new Date().toDateString());
+  } catch (e) {}
+  popupShown = true;
+  const img = /^https:\/\//i.test(p.imagemUrl || '') ? `<img class="pop-img" src="${esc(p.imagemUrl)}" alt="">` : '';
+  openModal(`${p.titulo ? `<div class="ribbon">${esc(p.titulo)}</div>` : ''}${img}${p.mensagem ? `<p>${esc(p.mensagem)}</p>` : ''}
+    <div class="row"><button class="btn btn-play" id="popBtn"><span>${esc(p.botaoTexto || 'OK')}</span></button></div>`);
+  $('#popBtn').onclick = () => {
+    closeModal();
+    if (p.botaoAcao === 'depositar') openSheet('wallet');
+    else if (p.botaoAcao === 'indicar') openSheet('indicacao');
+    else if (p.botaoAcao === 'link' && /^https:\/\//i.test(p.botaoUrl || '')) window.open(p.botaoUrl, '_blank', 'noopener');
+  };
 }
 async function logout(expired) {
   if (!expired) await Api.logout();
@@ -2132,4 +2167,14 @@ try {
 if (Auth.logged) enterLobby();
 else { state = 'auth'; showScreen('#auth'); authTab('reg'); }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { Art.clearCache(); buildScene(); });
+// PWA: service worker (rede primeiro) e botão "Instalar o app" quando o navegador oferece
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+let installEv = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; $('#btnInstall').classList.remove('hidden'); });
+$('#btnInstall').onclick = async () => {
+  if (!installEv) return;
+  installEv.prompt();
+  try { await installEv.userChoice; } catch (e) {}
+  installEv = null; $('#btnInstall').classList.add('hidden');
+};
 requestAnimationFrame(frame);

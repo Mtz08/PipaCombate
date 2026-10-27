@@ -461,3 +461,11 @@ body.pixel .tab{font-size:10px}
 .rg-row input,.rg-row select{flex:1;min-width:90px;padding:9px 10px;border-radius:12px;border:3px solid var(--ol);font-weight:800;font-size:14px}
 .rg-alert{background:#fde68a;color:#3b2a00;border:3px solid var(--ol);border-radius:14px;padding:8px 10px;font-weight:800;font-size:13px}
 .rg-row .btn{flex:1 1 40%;width:auto;min-width:0;margin:0}
+/* aviso de cookies (LGPD) */
+.cookie-bar{position:fixed;left:50%;bottom:calc(10px + var(--sab));transform:translateX(-50%);width:min(500px,calc(100vw - 20px));z-index:90;background:#fff;color:#1b1433;border:3px solid var(--ol);border-radius:16px;box-shadow:0 5px 0 var(--ol);padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-weight:800;font-size:13px}
+.cookie-bar a{color:#4338ca}
+.cookie-bar div{display:flex;gap:8px;justify-content:flex-end}
+.cookie-bar button{padding:8px 14px;border-radius:999px;border:3px solid var(--ol);background:#e5e7eb;font-weight:900;cursor:pointer}
+.cookie-bar button.ok{background:#22c55e;color:#fff}
+/* popup do painel */
+.pop-img{max-width:100%;max-height:45vh;border-radius:14px;border:3px solid var(--ol);align-self:center}

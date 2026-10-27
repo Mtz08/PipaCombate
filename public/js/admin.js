@@ -28,6 +28,9 @@ async function boot() {
       <form id="fJogo" class="aff-form"></form></section>
     <section class="card"><h2>Limites de depósito e saque</h2><form id="fLim" class="aff-form"></form></section>
     <section class="card"><h2>Textos e botões públicos</h2><form id="fPub" class="aff-form"></form></section>
+    <section class="card"><h2>Pixels de anúncio</h2>
+      <p class="hint">Só carregam para quem aceitar os cookies de marketing. Eventos: cadastro (CompleteRegistration), início de depósito (InitiateCheckout) e depósito confirmado (Purchase / CompletePayment).</p>
+      <form id="fMkt" class="aff-form"></form></section>
     <section class="card"><h2>Indique e ganhe</h2><div id="affStats" class="grid"></div>
       <form id="affForm" class="aff-form">
         <label class="check"><input type="checkbox" name="ativo"> Programa ativo</label>
@@ -49,6 +52,7 @@ async function boot() {
   $('#btnExpire').onclick = async () => { const r = await api('expire-rounds', {}); alert(`${r.expired} round(s) encerrado(s).`); stats(); };
   stats(); search(); audit(); withdrawals(); affiliates();
   settingsForm('jogo', '#fJogo', JOGO); settingsForm('limites', '#fLim', LIMITES); publicoForm();
+  settingsForm('marketing', '#fMkt', MARKETING);
 }
 
 /* ---------- formularios de configuracao (settings) ----------
@@ -65,7 +69,13 @@ const LIMITES = [
   ['withdrawMinCents', 'Saque mínimo R$', 'reais'], ['withdrawMaxCents', 'Saque máximo R$', 'reais'],
   ['withdrawAutoMaxCents', 'Saque automático até R$ (0 = todos passam por aprovação)', 'reais'],
 ];
+const MARKETING = [
+  ['metaPixelId', 'Pixel do Meta (ID numérico)', 'txt'], ['tiktokPixelId', 'Pixel do TikTok (ID)', 'txt'],
+  ['utmifyPixelId', 'Pixel da UTMify (ID)', 'txt'], ['utmifyUtms', 'Script de UTMs da UTMify (sim/não)', 'bool'],
+];
 const conv = {
+  txt: [(v) => String(v ?? ''), (s) => String(s).trim()],
+  bool: [(v) => (v ? 'sim' : 'não'), (s) => /^s/i.test(String(s).trim())],
   reais: [(v) => (v / 100).toFixed(2), (s) => Math.round(parseFloat(String(s).replace(',', '.')) * 100)],
   pct: [(v) => (v / 100).toFixed(2), (s) => Math.round(parseFloat(String(s).replace(',', '.')) * 100)],
   mult: [(v) => (v / 100).toFixed(2), (s) => Math.round(parseFloat(String(s).replace(',', '.')) * 100)],
@@ -101,6 +111,15 @@ async function publicoForm() {
     <p class="hint">Botões de depósito rápido (até 8). Deixe o valor vazio para remover.</p>
     <div id="pubChips">${v.depositoRapidoCents.map(linha).join('')}</div>
     <div class="row"><button type="button" data-add>+ botão</button></div>
+    <p class="hint">Popup de aviso (aparece no lobby)</p>
+    <label class="check"><input type="checkbox" name="popAtivo" ${v.popup.ativo ? 'checked' : ''}> Popup ativo</label>
+    <div class="row"><b>Título</b><input name="popTitulo" maxlength="60" value="${esc(v.popup.titulo)}"></div>
+    <textarea name="popMsg" rows="2" maxlength="400" placeholder="Mensagem">${esc(v.popup.mensagem)}</textarea>
+    <div class="row"><b>Imagem (https://)</b><input name="popImg" value="${esc(v.popup.imagemUrl)}"></div>
+    <div class="row"><b>Botão</b><input name="popBtn" maxlength="30" placeholder="texto" value="${esc(v.popup.botaoTexto)}">
+      <select name="popAcao">${[['fechar', 'só fecha'], ['depositar', 'abre o depósito'], ['indicar', 'abre o indique e ganhe'], ['link', 'abre um link']].map(([k, t]) => `<option value="${k}" ${v.popup.botaoAcao === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="row"><b>Link do botão</b><input name="popUrl" value="${esc(v.popup.botaoUrl)}"></div>
+    <div class="row"><b>Mostrar</b><select name="popFreq">${[['sessao', 'uma vez por visita'], ['diaria', 'uma vez por dia'], ['sempre', 'toda vez que abrir o lobby']].map(([k, t]) => `<option value="${k}" ${v.popup.frequencia === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <p class="hint">Links de suporte (https://), um por linha no formato: Nome | https://...</p>
     <textarea name="suporte" rows="3">${esc(v.suporte.map((s) => `${s.nome} | ${s.url}`).join('\n'))}</textarea>
     <div class="row"><button class="primary" type="submit">Salvar</button></div><p class="msg"></p>`;
@@ -115,7 +134,11 @@ async function publicoForm() {
     });
     const suporte = f.suporte.value.split('\n').map((l) => l.split('|').map((x) => x.trim())).filter((p) => p[1]).map(([nome, url]) => ({ nome, url }));
     try {
-      await api('settings/publico', { value: { siteNome: f.siteNome.value, depositoRapidoCents: chips, depositoRotulos: rot, depositoCores: cor, suporte } });
+      const popup = {
+        ativo: f.popAtivo.checked, titulo: f.popTitulo.value, mensagem: f.popMsg.value, imagemUrl: f.popImg.value.trim(),
+        botaoTexto: f.popBtn.value, botaoAcao: f.popAcao.value, botaoUrl: f.popUrl.value.trim(), frequencia: f.popFreq.value,
+      };
+      await api('settings/publico', { value: { siteNome: f.siteNome.value, depositoRapidoCents: chips, depositoRotulos: rot, depositoCores: cor, suporte, popup } });
       f.querySelector('.msg').textContent = 'Salvo.'; audit();
     } catch (err) { f.querySelector('.msg').textContent = err.message; }
   };
@@ -194,6 +217,7 @@ async function detail(id) {
   $('#detail').innerHTML = `
     <div class="revealed">
       <p><b>${esc(d.user.name)}</b> · ${esc(d.user.phone)} · saldo <b>${brl(d.user.balanceCents)}</b></p>
+      <p class="hint">Origem: ${d.user.utm ? esc(Object.entries(d.user.utm).map(([k, x]) => `${k}=${x}`).join(' · ')) : 'sem UTM'}${d.user.ref ? ` · indicado por código ${esc(d.user.ref)}` : ''}</p>
       <div class="row"><input id="adjV" type="number" placeholder="Ajuste R$ (+/-)"><input id="adjR" placeholder="Motivo (obrigatorio)"><button id="btnAdj">Ajustar</button></div>
       <p id="adjMsg" class="msg"></p>
       <details><summary>Extrato (${d.ledger.length})</summary><ul class="ledger">${d.ledger.map((l) => `<li><span>${esc(LABEL[l.type] || l.type)}${l.reason ? ` <small>${esc(l.reason)}</small>` : ''}</span><span class="${l.deltaCents < 0 ? 'neg' : 'pos'}">${brl(l.deltaCents)}</span><small>${dt(l.at)}</small></li>`).join('')}</ul></details>

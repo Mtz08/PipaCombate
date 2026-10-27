@@ -36,11 +36,12 @@ export function createApp() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:'],
+        imgSrc: ["'self'", 'data:', 'https:'], // imagem do popup (https) e pixels de imagem
+        scriptSrc: ["'self'", 'https://connect.facebook.net', 'https://analytics.tiktok.com', 'https://cdn.utmify.com.br'],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
         styleSrcAttr: ["'unsafe-inline'"], // style="--c:..." gerado pelo front (so atributos)
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://*.facebook.com', 'https://*.facebook.net', 'https://*.tiktok.com', 'https://*.tiktokw.us', 'https://*.utmify.com.br'],
         frameAncestors: ["'none'"],
         upgradeInsecureRequests: CONFIG.isProd ? [] : null,
       },

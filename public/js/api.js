@@ -90,7 +90,10 @@ const SAQ_ST = {
 export const Api = {
   /* ---- conta ---- */
   register: (name, phone, password, ref) =>
-    post('auth/register', { name, phone, password, ref: ref || null, terms: true }).then(fromSession),
+    post('auth/register', {
+      name, phone, password, ref: ref || null, terms: true,
+      utm: (window.PCPixel && window.PCPixel.utm()) || null, // origem da campanha (1ª visita)
+    }).then(fromSession),
   login: (phone, password) => post('auth/login', { phone, password }).then(fromSession),
   me: () => call('auth/me').then(fromSession),
   logout: () => post('auth/logout').catch(() => {}),
@@ -143,7 +146,7 @@ export const Api = {
   async deposit(amountCents) {
     const j = await post('wallet/deposit', { amountCents });
     const c = j.charge || {};
-    if (c.status === 'paid') return { balanceCents: j.balanceCents }; // confirmado na hora (mock)
+    if (c.status === 'paid') return { id: c.id, paid: true, balanceCents: j.balanceCents }; // confirmado na hora (mock)
     return {
       id: c.id, pixCode: c.copyPaste || '', balanceCents: j.balanceCents,
       qrcode: c.qrCodeBase64 ? 'data:image/png;base64,' + c.qrCodeBase64 : '',

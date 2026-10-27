@@ -112,6 +112,21 @@ export const SCHEMAS = {
     },
   },
 
+  // Pixels de anuncio. Sao publicos por natureza (vao para o navegador), so
+  // carregam depois do consentimento de cookies do visitante.
+  marketing: {
+    padrao: () => ({ metaPixelId: '', tiktokPixelId: '', utmifyPixelId: '', utmifyUtms: false }),
+    validar(v) {
+      const id = (x, re, campo) => { const s = String(x ?? '').trim(); if (s && !re.test(s)) throw bad(`${campo}: formato invalido`); return s; };
+      return {
+        metaPixelId: id(v.metaPixelId, /^\d{5,20}$/, 'Pixel do Meta'),
+        tiktokPixelId: id(v.tiktokPixelId, /^[A-Z0-9]{10,30}$/i, 'Pixel do TikTok'),
+        utmifyPixelId: id(v.utmifyPixelId, /^[a-f0-9-]{8,40}$/i, 'Pixel da UTMify'),
+        utmifyUtms: v.utmifyUtms !== false,
+      };
+    },
+  },
+
   // Textos e botoes publicos (sem login): nome, botoes de deposito rapido, suporte.
   publico: {
     padrao: () => ({
@@ -120,6 +135,7 @@ export const SCHEMAS = {
       depositoRotulos: { 2000: 'MÍNIMO', 3000: 'BOM', 4000: 'ÓTIMO', 5000: 'EXCELENTE', 10000: 'TOP', 20000: 'TOP' },
       depositoCores: { 2000: '#0ce100', 3000: '#f59e0b', 4000: '#ef5d00', 5000: '#f20000', 10000: '#52005f', 20000: '#450d59' },
       suporte: [], // [{ nome, url }]
+      popup: { ativo: false, titulo: '', mensagem: '', imagemUrl: '', botaoTexto: '', botaoAcao: 'fechar', botaoUrl: '', frequencia: 'sessao' },
     }),
     validar(v) {
       if (!Array.isArray(v.depositoRapidoCents) || !v.depositoRapidoCents.length || v.depositoRapidoCents.length > 8) throw bad('botoes de deposito: de 1 a 8 valores');
@@ -137,7 +153,21 @@ export const SCHEMAS = {
         if (!/^https:\/\/[^\s"'<>]+$/i.test(url)) throw bad('link de suporte: use um endereco https://');
         return { nome: texto(s?.nome, 30, 'nome do suporte') || 'Suporte', url };
       });
-      return { siteNome: texto(v.siteNome, 40, 'nome do site') || 'Pipa Combate', depositoRapidoCents: chips, depositoRotulos: rotulos, depositoCores: cores, suporte };
+      const p = v.popup || {};
+      const https = (u, campo) => { const s = texto(u, 400, campo); if (s && !/^https:\/\/[^\s"'<>]+$/i.test(s)) throw bad(`${campo}: use um endereco https://`); return s; };
+      const popup = {
+        ativo: p.ativo === true,
+        titulo: texto(p.titulo, 60, 'titulo do popup'),
+        mensagem: texto(p.mensagem, 400, 'mensagem do popup'),
+        imagemUrl: https(p.imagemUrl, 'imagem do popup'),
+        botaoTexto: texto(p.botaoTexto, 30, 'texto do botao do popup'),
+        botaoAcao: ['fechar', 'depositar', 'indicar', 'link'].includes(p.botaoAcao) ? p.botaoAcao : 'fechar',
+        botaoUrl: https(p.botaoUrl, 'link do botao do popup'),
+        frequencia: ['sessao', 'diaria', 'sempre'].includes(p.frequencia) ? p.frequencia : 'sessao',
+      };
+      if (popup.ativo && !popup.titulo && !popup.mensagem && !popup.imagemUrl) throw bad('popup ativo precisa de titulo, mensagem ou imagem');
+      if (popup.botaoAcao === 'link' && !popup.botaoUrl) throw bad('popup: informe o link do botao');
+      return { siteNome: texto(v.siteNome, 40, 'nome do site') || 'Pipa Combate', depositoRapidoCents: chips, depositoRotulos: rotulos, depositoCores: cores, suporte, popup };
     },
   },
 };

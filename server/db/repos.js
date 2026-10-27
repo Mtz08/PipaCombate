@@ -12,7 +12,7 @@ export function mapUser(r) {
     referralCode: r.referral_code, balanceCents: r.balance_cents,
     sessionVersion: r.session_version, createdAt: ms(r.created_at), role: r.role,
     referredBy: r.referred_by ?? null, termsAcceptedAt: ms(r.terms_accepted_at), termsVersion: r.terms_version ?? null,
-    cpfHash: r.cpf_hash ?? null,
+    cpfHash: r.cpf_hash ?? null, utm: r.utm ?? null,
     depLimitCents: r.dep_limit_cents == null ? null : Number(r.dep_limit_cents), depLimitPeriod: r.dep_limit_period ?? null,
     depLimitNextCents: r.dep_limit_next_cents == null ? null : Number(r.dep_limit_next_cents), depLimitNextPeriod: r.dep_limit_next_period ?? null,
     depLimitNextAt: ms(r.dep_limit_next_at), depLimitNextSet: !!r.dep_limit_next_set, selfExcludedUntil: ms(r.self_excluded_until),
@@ -29,11 +29,11 @@ export const Users = {
   async getByReferralCode(q, code) {
     return mapUser((await q.query('SELECT * FROM users WHERE referral_code = $1', [code]))[0]) || null;
   },
-  async create(q, { name, phone, passwordHash, ref, referralCode, referredBy = null, termsVersion = null }) {
+  async create(q, { name, phone, passwordHash, ref, referralCode, referredBy = null, termsVersion = null, utm = null }) {
     const rows = await q.query(
-      `INSERT INTO users (name, phone, password_hash, ref, referral_code, referred_by, terms_accepted_at, terms_version)
-       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, $7) RETURNING *`,
-      [name, phone, passwordHash, ref, referralCode, referredBy, termsVersion],
+      `INSERT INTO users (name, phone, password_hash, ref, referral_code, referred_by, terms_accepted_at, terms_version, utm)
+       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, $7, $8) RETURNING *`,
+      [name, phone, passwordHash, ref, referralCode, referredBy, termsVersion, utm ? JSON.stringify(utm) : null],
     );
     return mapUser(rows[0]);
   },

@@ -198,7 +198,10 @@ Feito: parâmetros do jogo editáveis no painel (RTP 90–99%, ganho máximo, % 
 - Painel: usuários, rodadas, depósitos, saques, afiliados, parâmetros do jogo (RTP, teto e % por rival) e auditoria.
 - Jogo responsável: limites de depósito por usuário, autoexclusão e alertas.
 
-### Fase 7: Marketing e PWA
+### Fase 7: Marketing e PWA ✅ concluída em 27/10/2026
+Feito: `js/pixels.js` com Pixel do Meta, Pixel do TikTok e UTMify (UTMs e pixel), carregados só depois do aceite no aviso de cookies (LGPD); eventos CompleteRegistration, InitiateCheckout e Purchase/CompletePayment (com `eventID dep_<id>` para deduplicar com envio pelo servidor no futuro); UTMs da 1ª visita salvas no cadastro (`users.utm`) e visíveis no admin; IDs dos pixels e popup de aviso (título, mensagem, imagem https, botão para depósito/indicação/link, frequência) editáveis no painel; CSP liberando só os domínios dos pixels; PWA com service worker "rede primeiro" (não guarda API nem admin), ícones PNG 192/512 e botão "Instalar o app". Migração `009_marketing.sql`. 58/58 testes.
+Não incluído: Pixel do Kwai (o site antigo também não carregava; precisa do script oficial do Kwai Ads) e envio de conversões pelo servidor (Conversions API), que depende do gateway (Fase 9).
+
 - Pixels Meta, TikTok e Kwai e UTMify, ligados pelo admin (porte do `pixels.js`), com consentimento de cookies.
 - Manifesto PWA, ícones e tela cheia.
 - Textos honestos: nada de "moedas fictícias" se o saldo for real.

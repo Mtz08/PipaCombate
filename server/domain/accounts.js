@@ -19,9 +19,22 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password-nunca-usado', BCRYPT_COST);
 const REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newReferralCode = () => [...randomBytes(8)].map((b) => REF_ALPHABET[b % REF_ALPHABET.length]).join('');
 
+// UTMs da primeira visita (origem da campanha), guardadas no cadastro.
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'src', 'sck', 'xcod'];
+/** So as chaves conhecidas, texto curto e sem controle. */
+function cleanUtm(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = {};
+  for (const k of UTM_KEYS) {
+    const v = raw[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /** Cadastro. Rejeita telefone ja usado (409). ref e o codigo de afiliado de origem.
- *  terms: aceite de "maior de 18 + termos de uso", obrigatorio. */
-export async function register({ name, phone, password, ref, terms }) {
+ *  terms: aceite de "maior de 18 + termos de uso", obrigatorio. utm: origem da campanha. */
+export async function register({ name, phone, password, ref, terms, utm }) {
   const cleanName = normalizeName(name);
   const cleanPhone = normalizePhone(phone);
   assertPassword(password);
@@ -39,7 +52,7 @@ export async function register({ name, phone, password, ref, terms }) {
     return await tx(async (t) => {
       const user = await Users.create(t, {
         name: cleanName, phone: cleanPhone, passwordHash, ref: cleanRef, referralCode: newReferralCode(),
-        referredBy: referrer?.id ?? null, termsVersion: CONFIG.termsVersion,
+        referredBy: referrer?.id ?? null, termsVersion: CONFIG.termsVersion, utm: cleanUtm(utm),
       });
       if (CONFIG.signupBonusCents > 0) await applyCredit(t, user, CONFIG.signupBonusCents, 'bonus');
       return user;

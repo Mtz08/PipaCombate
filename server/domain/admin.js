@@ -51,7 +51,7 @@ export async function userDetail(id) {
   if (!user) throw domainError('NOT_FOUND', 'Usuario inexistente', 404);
   const auditRows = await db.query('SELECT action, meta, ip, created_at FROM audit_log WHERE user_id = $1 ORDER BY id DESC LIMIT 30', [id]);
   return {
-    user: { id: user.id, name: user.name, phone: maskPhone(user.phone), balanceCents: user.balanceCents, role: user.role, createdAt: user.createdAt },
+    user: { id: user.id, name: user.name, phone: maskPhone(user.phone), balanceCents: user.balanceCents, role: user.role, createdAt: user.createdAt, utm: user.utm, ref: user.ref },
     ledger: await Ledger.recent(db, id, 50),
     rounds: await Rounds.history(db, id, 20),
     audit: auditRows,
