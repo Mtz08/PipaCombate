@@ -81,18 +81,17 @@ export const CONFIG = {
     betMaxCents: 100000,
   },
 
-  // Parametros matematicos do jogo. RTP (retorno ao jogador) no padrao de
-  // mercado (95-97%). Ver domain/game.js para a derivacao do multiplicador.
+  // Parametros matematicos do jogo. Ver domain/game.js para a derivacao do multiplicador.
   game: {
-    // 25,00% devolvido ao jogador. Sacar em qualquer multiplicador m >= 1,00x
-    // perde a rodada em pelo menos ~75% das vezes: P(vento > m) <= 0,25 / m.
-    // A casa fica com 75% do apostado, seja qual for a estrategia.
-    rtpBps: 2500,
+    // 35,00% devolvido ao jogador. Sacar em qualquer multiplicador m >= 1,00x
+    // perde a rodada em pelo menos ~65% das vezes: P(vento > m) <= 0,35 / m.
+    // A casa fica com 65% do apostado, seja qual for a estrategia.
+    rtpBps: 3500,
     maxMultX100: 5000,     // teto absoluto 50,00x
     minCutIntervalMs: 250, // cortes mais rapidos que isso sao recusados (anti-automacao)
     // somado ao multiplicador a cada corte, por tipo (centesimos: 5 = +0,05x).
     // Passos menores: o primeiro saque fica perto de 1,05x, onde a casa ainda
-    // ganha ~76% das rodadas. Chefao nao pula 1,00x de uma vez.
+    // ganha cerca de 67% das rodadas. Chefao nao pula 1,00x de uma vez.
     pctX100: { moleque: 5, veloz: 8, aparador: 8, pesadao: 12, cortador: 10, chefe: 50, aparar: 3 },
     maps: ['laje', 'campinho', 'morro', 'praia', 'tempestade', 'noite'], // ids de public/js/data.js
     forca: 2.4,            // vida x2,4 e linha mais forte, a MESMA em toda rodada

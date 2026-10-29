@@ -8,7 +8,7 @@
 // - Se um rival corta a pipa do jogador, aposta perdida.
 //
 // GARANTIA: sacar em qualquer multiplicador m tem retorno esperado <= RTP.
-// Com RTP 25%, a casa ganha pelo menos ~75% das rodadas em saque >= 1,00x.
+// Com RTP 35%, a casa ganha pelo menos ~65% das rodadas em saque >= 1,00x.
 // Cliente adulterado que "invente" cortes so faz o vento virar mais cedo.
 // Os rivais tem a mesma forca em todo round.
 

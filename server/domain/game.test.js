@@ -20,10 +20,10 @@ test('RTP teorico: sacar em m tem retorno P(vento > m) * m ~= RTP configurado', 
     const alvo = CONFIG.game.rtpBps / 10000;
     assert.ok(Math.abs(rtp - alvo) < 0.03, `m=${m} rtp=${rtp} alvo=${alvo}`);
   }
-  // Em 1,00x a casa ganha cerca de 75% das rodadas (1 - RTP).
+  // Em 1,00x a casa ganha cerca de 65% das rodadas (1 - RTP).
   let perdas = 0;
   for (let i = 0; i < N; i++) if (!(windPoint('a'.repeat(64), 'casa', i) > 100)) perdas++;
-  assert.ok(Math.abs(perdas / N - 0.75) < 0.02, `casa ganhou ${perdas / N}`);
+  assert.ok(Math.abs(perdas / N - 0.65) < 0.02, `casa ganhou ${perdas / N}`);
 });
 
 test('RTP do painel muda o sorteio: maior RTP, vento mais tarde', () => {
@@ -51,7 +51,7 @@ test('corte soma ao multiplicador e cashout paga aposta x multiplicador', async 
   for (let i = 0; i < 40; i++) {
     const { round } = await start(u.id, { betCents: 1000 });
     const r = await cut(u.id, round.id, { kind: 'moleque' });
-    if (r.wind) continue; // ~75% das rodadas o vento ja esta em 1,00x ou menos
+    if (r.wind) continue; // ~65% das rodadas o vento ja esta em 1,00x ou menos
     assert.equal(r.round.multiplier, multX100 / 100);
     const before = await balanceOf(u.id);
     const c = await cashout(u.id, round.id);
