@@ -40,7 +40,16 @@ test('limites de aposta e deposito vem do painel; configuracao invalida e recusa
   await assert.rejects(() => start(u.id, { betCents: 1000 }), (e) => e.code === 'OUT_OF_RANGE');
   await setSetting('limites', { depositMinCents: 5000 }, null);
   await assert.rejects(() => createDeposit(u.id, 3000), (e) => e.code === 'OUT_OF_RANGE');
-  await assert.rejects(() => setSetting('jogo', { rtpBps: 10000 }, null), (e) => e.code === 'INVALID_SETTING');
+  const livre = await setSetting('jogo', { rtpBps: 10000 }, null); // sem a faixa 90–99%
+  assert.equal(livre.rtpBps, 10000);
+  const u2 = await makeUser('1155550099', 100000);
+  const { round: r2 } = await start(u2.id, { betCents: 1000 });
+  const saved = await Rounds.get(db, r2.id);
+  assert.equal(saved.rtpBps, 10000);
+  const par = await FairSeeds.get(db, saved.seedId);
+  assert.equal(windPoint(par.serverSeed, par.clientSeed, saved.nonce, saved.rtpBps, saved.maxMultX100), saved.ceilingX100);
+  await lose(u2.id, r2.id, { reason: 'cut' });
+  await assert.rejects(() => setSetting('jogo', { rtpBps: -1 }, null), (e) => e.code === 'INVALID_SETTING');
   await assert.rejects(() => setSetting('limites', { withdrawMinCents: 9000, withdrawMaxCents: 100 }, null), (e) => e.code === 'INVALID_SETTING');
   await setSetting('jogo', null, null); await setSetting('limites', null, null);
 });

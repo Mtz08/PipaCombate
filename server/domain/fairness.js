@@ -6,9 +6,9 @@
 //  3. Cada round consome um nonce (0, 1, 2...). O ponto em que o vento vira:
 //        h = HMAC_SHA256(chave = server_seed, msg = "client_seed:nonce")
 //        u = 6 primeiros bytes de h / 2^48          (uniforme em [0, 1))
-//        vento = floor(100 * RTP / (1 - u)) / 100, limitado ao teto (50x)
+//        vento = floor(100 * RTP / (1 - u)) / 100, limitado ao teto
 //     Assim P(vento > m) <= RTP / m: sacar em QUALQUER multiplicador m tem
-//     retorno esperado <= RTP (96%), seja qual for a habilidade ou estrategia.
+//     retorno esperado <= RTP do painel, seja qual for a habilidade ou estrategia.
 //  4. Ao trocar a seed (rotate), a server_seed antiga e revelada. O jogador
 //     confere: sha256(seed revelada) == hash publicado, e recalcula os rounds.
 //
@@ -100,7 +100,7 @@ export function verify({ serverSeed, clientSeed, nonce, rtpBps, maxMultX100 }) {
   if (!CLIENT_SEED_RE.test(cs)) throw domainError('INVALID_CLIENT_SEED', 'Client seed invalida');
   if (!Number.isInteger(n) || n < 0) throw domainError('INVALID_NONCE', 'Nonce invalido');
   const rtp = rtpBps == null ? undefined : Number(rtpBps), max = maxMultX100 == null ? undefined : Number(maxMultX100);
-  if (rtp !== undefined && !(Number.isInteger(rtp) && rtp >= 1 && rtp < 10000)) throw domainError('INVALID_RTP', 'RTP invalido');
+  if (rtp !== undefined && !(Number.isInteger(rtp) && rtp >= 0 && rtp <= 1000000)) throw domainError('INVALID_RTP', 'RTP invalido');
   if (max !== undefined && !(Number.isInteger(max) && max >= 100)) throw domainError('INVALID_MAX', 'Teto invalido');
   const windX100 = windPoint(ss, cs, n, rtp, max);
   return { serverSeedHash: sha256(ss), windX100, wind: windX100 / 100 };

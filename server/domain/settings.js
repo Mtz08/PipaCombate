@@ -78,7 +78,7 @@ export const SCHEMAS = {
       const pct = {};
       for (const k of KINDS) pct[k] = int(v.pctX100?.[k], 1, 500, `% do ${k}`);
       const out = {
-        rtpBps: int(v.rtpBps, 9000, 9900, 'RTP (centesimos de %)'),
+        rtpBps: int(v.rtpBps, 0, 1000000, 'RTP (centesimos de %)'),
         maxMultX100: int(v.maxMultX100, 200, 10000, 'ganho maximo'),
         pctX100: pct,
         forca: num(v.forca, 0.5, 3, 'forca dos rivais'),

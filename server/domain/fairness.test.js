@@ -18,6 +18,14 @@ test('vento e deterministico, >= RTP (ex.: 0,90x) e <= teto de 50x', () => {
   }
 });
 
+test('verificador aceita RTP 0% e 100% (mesma faixa do painel)', () => {
+  const v = verify({ serverSeed: SEED, clientSeed: 'abc', nonce: 0, rtpBps: 10000, maxMultX100: 5000 });
+  assert.equal(v.windX100, windPoint(SEED, 'abc', 0, 10000, 5000));
+  const zero = verify({ serverSeed: SEED, clientSeed: 'abc', nonce: 0, rtpBps: 0, maxMultX100: 5000 });
+  assert.equal(zero.windX100, 0);
+  assert.throws(() => verify({ serverSeed: SEED, clientSeed: 'abc', nonce: 0, rtpBps: -1 }), (e) => e.code === 'INVALID_RTP');
+});
+
 test('status nunca expoe a server seed ativa', async () => {
   const u = await makeUser('1155550001');
   const s = await status(u.id);

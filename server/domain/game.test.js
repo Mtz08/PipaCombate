@@ -22,6 +22,25 @@ test('RTP teorico: sacar em m tem retorno P(vento > m) * m ~= RTP configurado', 
   }
 });
 
+test('RTP do painel muda o sorteio: maior RTP, vento mais tarde', () => {
+  const N = 20000;
+  const seed = 'b'.repeat(64);
+  const media = (rtpBps) => {
+    let s = 0;
+    for (let i = 0; i < N; i++) s += windPoint(seed, 'painel', i, rtpBps, 5000);
+    return s / N;
+  };
+  const baixo = media(5000);  // 50%
+  const medio = media(9000);  // 90%
+  const alto = media(10000);  // 100%
+  assert.ok(baixo < medio && medio < alto, `medias ${baixo} ${medio} ${alto}`);
+  // sacar em 2,00x: retorno esperado ~ RTP (nao o padrao do CONFIG)
+  let ok = 0;
+  for (let i = 0; i < N; i++) if (windPoint(seed, 'painel', i, 5000, 5000) > 200) ok++;
+  const retorno = (ok / N) * 2;
+  assert.ok(Math.abs(retorno - 0.5) < 0.04, `retorno 50% deu ${retorno}`);
+});
+
 test('corte soma ao multiplicador e cashout paga aposta x multiplicador', async () => {
   const u = await makeUser('1188880001', 100000);
   for (;;) {
