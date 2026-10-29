@@ -47,7 +47,19 @@ export async function createDeposit(userId, amountCents) {
     return Charges.create(t, { userId, amountCents, provider: CONFIG.payments.provider, expiresAt });
   });
 
-  const pix = await provider.createPixCharge({ chargeId: created.id, amountCents, expiresAt });
+  const payer = await Users.getById(db, userId);
+  let pix;
+  try {
+    pix = await provider.createPixCharge({
+      chargeId: created.id, amountCents, expiresAt,
+      payer: payer ? { name: payer.name, phone: payer.phone } : null,
+    });
+  } catch (err) {
+    // cobranca sem PIX nao pode continuar contando no limite de deposito
+    await tx((t) => t.query(`UPDATE charges SET expires_at = now() WHERE id = $1 AND status = 'pending'`, [created.id]));
+    log('error', 'psp_charge_failed', { chargeId: created.id, err: String(err?.message || err).slice(0, 200) });
+    throw domainError('PIX_UNAVAILABLE', 'Nao foi possivel gerar o PIX agora. Tente de novo em instantes.', 502);
+  }
   let charge = await tx((t) => Charges.attachPix(t, created.id, pix));
 
   // Mock: simula o PSP confirmando o pagamento imediatamente (nunca em producao: ver config.js).
@@ -149,7 +161,7 @@ export function viewCharge(c) {
 // ---------- Saque ----------
 
 /** source: 'balance' (saldo de jogo) ou 'affiliate' (saldo de comissao). */
-export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, source = 'balance' }) {
+export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, source = 'balance', clientIp = null }) {
   const key = normalizePixKey(pixKey);
   const doc = assertCpf(cpf); // nunca em claro no banco (LGPD): so cifrado enquanto espera aprovacao
   const fromAff = source === 'affiliate';
@@ -176,25 +188,26 @@ export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, sour
       const w = await Withdrawals.create(t, {
         userId, amountCents, pixKey: key, pixKeyMask: maskPixKey(key), provider: CONFIG.payments.provider,
         status: review ? 'review' : 'processing', cpfEnc: review ? seal(doc) : null, source: fromAff ? 'affiliate' : 'balance',
+        clientIp,
       });
       const meta = { withdrawalId: w.id, pixKeyMask: w.pixKeyMask };
       if (fromAff) {
         const affiliateBalanceCents = await Affiliates.debitForWithdraw(t, userId, amountCents, meta);
-        return { withdrawal: w, balanceCents: user.balanceCents, affiliateBalanceCents };
+        return { withdrawal: w, balanceCents: user.balanceCents, affiliateBalanceCents, ownerName: user.name };
       }
       const balanceCents = await applyDebit(t, user, amountCents, 'withdraw', meta);
       await Affiliates.onWithdrawal(t, user, { amountCents, withdrawalId: w.id }); // devolve a comissao do que saiu
-      return { withdrawal: w, balanceCents };
+      return { withdrawal: w, balanceCents, ownerName: user.name };
     });
   } catch (err) {
     if (isUniqueViolation(err, 'users_cpf_hash_uniq')) throw domainError('CPF_IN_USE', 'Este CPF ja esta vinculado a outra conta.', 409);
     throw err;
   }
 
-  const { withdrawal, balanceCents } = result;
+  const { withdrawal, balanceCents, ownerName } = result;
   const extra = fromAff ? { affiliateBalanceCents: (await Affiliates.balanceOf(db, userId)) } : {};
   if (review) return { withdrawal: viewWithdrawal(withdrawal), balanceCents, ...extra };
-  const done = await sendToPsp(withdrawal, key, doc);
+  const done = await sendToPsp(withdrawal, key, doc, { ownerName, clientIp });
   return { withdrawal: viewWithdrawal(done), balanceCents, ...extra };
 }
 
@@ -218,10 +231,13 @@ async function failAndRefund(w, nextStatus, from, meta) {
  * Pede a transferencia ao PSP. Recusa definitiva (err.definitive) estorna; erro
  * ambiguo (timeout/rede) NAO estorna: o PIX pode ter saido. Fica 'processing'.
  */
-async function sendToPsp(withdrawal, pixKey, cpf) {
+async function sendToPsp(withdrawal, pixKey, cpf, owner = {}) {
   let result;
   try {
-    result = await getProvider().sendPixTransfer({ withdrawalId: withdrawal.id, amountCents: withdrawal.amountCents, pixKey, cpf });
+    result = await getProvider().sendPixTransfer({
+      withdrawalId: withdrawal.id, amountCents: withdrawal.amountCents, pixKey, cpf,
+      ownerName: owner.ownerName, clientIp: owner.clientIp,
+    });
   } catch (err) {
     if (err && err.definitive) {
       const bal = await failAndRefund(withdrawal, 'failed', ['processing'], { withdrawalId: withdrawal.id });
@@ -232,7 +248,9 @@ async function sendToPsp(withdrawal, pixKey, cpf) {
     await audit(null, { userId: withdrawal.userId, action: 'withdraw_unknown', meta: { withdrawalId: withdrawal.id } });
     return { ...withdrawal, status: 'processing' };
   }
-  const done = await tx((t) => Withdrawals.finish(t, withdrawal.id, { status: result.status, providerRef: result.providerRef, from: ['processing'] }));
+  const done = await tx((t) => Withdrawals.finish(t, withdrawal.id, {
+    status: result.status, providerRef: result.providerRef, webhookToken: result.webhookToken || null, from: ['processing'],
+  }));
   if (done && done.status === 'paid') await audit(null, { userId: withdrawal.userId, action: 'withdraw_paid', meta: { withdrawalId: withdrawal.id, amountCents: withdrawal.amountCents } });
   return done || (await Withdrawals.get(db, withdrawal.id));
 }
@@ -258,7 +276,8 @@ export async function confirmTransfer({ withdrawalId, providerRef, status }) {
 export async function approveWithdrawal(admin, withdrawalId, ip) {
   const w = await claimForReview(admin, withdrawalId, 'processing');
   await audit(null, { userId: w.userId, actorId: admin.id, action: 'withdraw_approved', meta: { withdrawalId: w.id, amountCents: w.amountCents }, ip });
-  const done = await sendToPsp(w, w.pixKey, open(w.cpfEnc));
+  const owner = await Users.getById(db, w.userId);
+  const done = await sendToPsp(w, w.pixKey, open(w.cpfEnc), { ownerName: owner?.name, clientIp: w.clientIp });
   return { withdrawal: viewWithdrawal(done) };
 }
 

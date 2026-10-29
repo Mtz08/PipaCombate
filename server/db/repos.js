@@ -201,11 +201,13 @@ export const Charges = {
       [userId, amountCents, provider, new Date(expiresAt)],
     ))[0]);
   },
-  async attachPix(q, id, { providerRef, copyPaste, qrCodeBase64 }) {
+  async attachPix(q, id, { providerRef, copyPaste, qrCodeBase64, webhookToken = null, expiresAt = null }) {
     return mapCharge((await q.query(
-      `UPDATE charges SET provider_ref = $2, copy_paste = $3, qr_code = $4
+      `UPDATE charges SET provider_ref = $2, copy_paste = $3, qr_code = $4,
+         webhook_token = COALESCE($5, webhook_token),
+         expires_at = COALESCE($6::timestamptz, expires_at)
        WHERE id = $1 RETURNING *`,
-      [id, providerRef, copyPaste, qrCodeBase64],
+      [id, providerRef, copyPaste, qrCodeBase64, webhookToken, expiresAt ? new Date(expiresAt) : null],
     ))[0]);
   },
   async setStatus(q, id, status) {
@@ -222,6 +224,7 @@ export const Charges = {
 const mapWithdrawal = (r) => r && {
   id: r.id, userId: r.user_id, amountCents: r.amount_cents, status: r.status,
   pixKey: r.pix_key, pixKeyMask: r.pix_key_mask, providerRef: r.provider_ref, cpfEnc: r.cpf_enc ?? null, source: r.source || 'balance',
+  clientIp: r.client_ip ?? null,
   reviewedBy: r.reviewed_by ?? null, reviewedAt: ms(r.reviewed_at), reviewNote: r.review_note ?? null,
   createdAt: ms(r.created_at), updatedAt: ms(r.updated_at),
 };
@@ -230,11 +233,11 @@ export const Withdrawals = {
   async get(q, id, { forUpdate = false } = {}) {
     return mapWithdrawal((await q.query(`SELECT * FROM withdrawals WHERE id = $1${forUpdate ? ' FOR UPDATE' : ''}`, [id]))[0]) || null;
   },
-  async create(q, { userId, amountCents, pixKey, pixKeyMask, provider, status = 'processing', cpfEnc = null, source = 'balance' }) {
+  async create(q, { userId, amountCents, pixKey, pixKeyMask, provider, status = 'processing', cpfEnc = null, source = 'balance', clientIp = null }) {
     return mapWithdrawal((await q.query(
-      `INSERT INTO withdrawals (user_id, amount_cents, pix_key, pix_key_mask, provider, status, cpf_enc, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [userId, amountCents, pixKey, pixKeyMask, provider, status, cpfEnc, source],
+      `INSERT INTO withdrawals (user_id, amount_cents, pix_key, pix_key_mask, provider, status, cpf_enc, source, client_ip)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [userId, amountCents, pixKey, pixKeyMask, provider, status, cpfEnc, source, clientIp],
     ))[0]);
   },
   async getByRef(q, ref) {
@@ -242,14 +245,16 @@ export const Withdrawals = {
   },
   /** Atualiza status; ao finalizar (paid/failed/rejected) apaga chave e CPF (LGPD).
    *  from: so muda se o status atual for um destes (devolve null se nao mudou). */
-  async finish(q, id, { status, providerRef = null, from = null }) {
+  async finish(q, id, { status, providerRef = null, from = null, webhookToken = null }) {
     return mapWithdrawal((await q.query(
       `UPDATE withdrawals
          SET status = $2, provider_ref = COALESCE($3, provider_ref), updated_at = now(),
+             webhook_token = COALESCE($5, webhook_token),
              pix_key = CASE WHEN $2 IN ('paid','failed','rejected') THEN NULL ELSE pix_key END,
+             client_ip = CASE WHEN $2 IN ('paid','failed','rejected') THEN NULL ELSE client_ip END,
              cpf_enc = CASE WHEN $2 = 'review' THEN cpf_enc ELSE NULL END
        WHERE id = $1 AND ($4::text[] IS NULL OR status = ANY($4::text[])) RETURNING *`,
-      [id, status, providerRef, from],
+      [id, status, providerRef, from, webhookToken],
     ))[0]) || null;
   },
   async markReviewed(q, id, { by, note = null }) {

@@ -17,6 +17,9 @@ export const CONFIG = {
   isProd,
   isTest,
   port: Number(env.PORT) || 3000,
+  // AlwaysData define IP e HOST: o processo tem que escutar nesse endereco.
+  // Sem eles (nesta maquina), escuta em todas as interfaces.
+  host: env.HOST || env.IP || null,
   // Atras de proxy/CDN (Nginx, Cloudflare): necessario para IP real no rate limit.
   // Numero EXATO de proxies na frente (ex.: 1 = so a Cloudflare ou so o Nginx).
   // Valor maior que o real deixa o cliente falsificar o IP pelo X-Forwarded-For.
@@ -44,13 +47,20 @@ export const CONFIG = {
   adminReauthMs: 1000 * 60 * 10,          // acoes criticas do admin: 2FA nos ultimos 10 min
 
   payments: {
-    // 'mock' ate integrar o PSP. Trocar aqui + implementar o provider em server/payments/.
+    // 'mock' no desenvolvimento. 'sigilopay' quando as chaves reais estiverem no ambiente.
     provider: env.PAYMENTS_PROVIDER || 'mock',
-    // Segredo para validar a assinatura (HMAC) dos webhooks do PSP.
+    // Segredo HMAC do mock. A SigiloPay valida pelo token que ela devolve na criacao.
     webhookSecret: env.PAYMENTS_WEBHOOK_SECRET || DEV_SECRET,
     // So no mock: confirma o deposito na hora, simulando o webhook do PSP.
     mockAutoConfirm: env.PAYMENTS_MOCK_AUTOCONFIRM !== 'false',
     chargeTtlMs: 1000 * 60 * 30, // cobranca PIX expira em 30 min
+    sigilopay: {
+      baseUrl: env.SIGILOPAY_BASE_URL || 'https://app.sigilopay.com.br/api/v1',
+      publicKey: env.SIGILOPAY_PUBLIC_KEY || '',
+      secretKey: env.SIGILOPAY_SECRET_KEY || '',
+      // URL publica do site, sem barra no fim. O webhook e sempre {base}/api/webhooks/payments.
+      publicBaseUrl: env.PUBLIC_BASE_URL || '',
+    },
   },
 
   // Config publica entregue ao front em /api/public/config (sem dados sensiveis).
@@ -125,6 +135,11 @@ if (isProd) {
   if (!env.DATA_KEY || env.DATA_KEY.length < 32) problems.push('DATA_KEY (min. 32 caracteres)');
   // pagamento simulado em producao = deposito "pago" sem dinheiro entrar
   if (CONFIG.payments.provider === 'mock') problems.push('PAYMENTS_PROVIDER (o pagamento simulado nao roda em producao)');
+  if (CONFIG.payments.provider === 'sigilopay') {
+    if (!env.SIGILOPAY_PUBLIC_KEY) problems.push('SIGILOPAY_PUBLIC_KEY');
+    if (!env.SIGILOPAY_SECRET_KEY) problems.push('SIGILOPAY_SECRET_KEY');
+    if (!env.PUBLIC_BASE_URL) problems.push('PUBLIC_BASE_URL (URL https do site, para o webhook)');
+  }
   if (!env.PAYMENTS_WEBHOOK_SECRET || env.PAYMENTS_WEBHOOK_SECRET.length < 32) problems.push('PAYMENTS_WEBHOOK_SECRET (min. 32 caracteres)');
   if (env.TRUST_PROXY && !/^\d+$/.test(env.TRUST_PROXY)) problems.push('TRUST_PROXY (use o numero de proxies, ex.: 1)');
   if (env.ADMIN_PHONES) problems.push('ADMIN_PHONES (removido: crie admins com "npm run admin")');

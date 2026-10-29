@@ -11,7 +11,7 @@ import { log } from '../util/log.js';
 export const webhooksRouter = Router();
 
 webhooksRouter.post('/payments', wrap(async (req, res) => {
-  const event = req.rawBody ? getProvider().parseWebhook(req.rawBody, req.headers) : null;
+  const event = req.rawBody ? await getProvider().parseWebhook(req.rawBody, req.headers) : null;
   if (!event) return res.status(401).json({ error: { code: 'BAD_SIGNATURE', message: 'Assinatura invalida' } });
 
   let r = { ignored: true };

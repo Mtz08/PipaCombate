@@ -66,7 +66,7 @@ walletRouter.post('/responsavel/pausa', wrap(async (req, res) => {
 walletRouter.post('/withdraw-affiliate', wrap(async (req, res) => {
   const { amountCents, pixKey, cpf, password } = req.body ?? {};
   await assertPasswordOf(req.user, password); // sessao roubada nao saca sem a senha
-  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, source: 'affiliate' });
+  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, source: 'affiliate', clientIp: ipOf(req) });
   await audit(null, { userId: req.user.id, action: 'withdraw_affiliate', meta: { withdrawalId: r.withdrawal.id, amountCents: r.withdrawal.amountCents, pixKeyMask: r.withdrawal.pixKeyMask }, ip: ipOf(req) });
   res.status(201).json(r);
 }));
@@ -74,7 +74,7 @@ walletRouter.post('/withdraw-affiliate', wrap(async (req, res) => {
 walletRouter.post('/withdraw', wrap(async (req, res) => {
   const { amountCents, pixKey, cpf, password } = req.body ?? {};
   await assertPasswordOf(req.user, password); // sessao roubada nao saca sem a senha
-  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf }).catch(async (err) => {
+  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, clientIp: ipOf(req) }).catch(async (err) => {
     if (err.code === 'WITHDRAW_FAILED') await audit(null, { userId: req.user.id, action: 'withdraw_failed', meta: { amountCents: Number(amountCents) }, ip: ipOf(req) });
     throw err;
   });

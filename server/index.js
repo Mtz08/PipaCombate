@@ -9,9 +9,13 @@ import { log } from './util/log.js';
 
 await initDb();
 
-const server = createApp().listen(CONFIG.port, () => {
-  log('info', 'start', { env: CONFIG.env, db: dbKind(), payments: CONFIG.payments.provider, url: `http://localhost:${CONFIG.port}` });
-});
+function onReady() {
+  const host = CONFIG.host || 'localhost';
+  log('info', 'start', { env: CONFIG.env, db: dbKind(), payments: CONFIG.payments.provider, url: `http://${host}:${CONFIG.port}` });
+}
+const server = CONFIG.host
+  ? createApp().listen(CONFIG.port, CONFIG.host, onReady)
+  : createApp().listen(CONFIG.port, onReady);
 
 // encerra rounds abandonados a cada minuto
 const expireTimer = setInterval(() => expireRounds().catch((err) => log('error', 'expire-job', { err: err.message })), 60_000);

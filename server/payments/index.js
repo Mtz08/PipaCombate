@@ -9,9 +9,10 @@
 
 import { CONFIG } from '../config.js';
 import * as mock from './mock.js';
+import * as sigilopay from './sigilopay.js';
 
 // Objetos simples (copia do modulo) para os testes poderem substituir metodos.
-export const providers = { mock: { ...mock } };
+export const providers = { mock: { ...mock }, sigilopay: { ...sigilopay } };
 
 export function getProvider() {
   const p = providers[CONFIG.payments.provider];

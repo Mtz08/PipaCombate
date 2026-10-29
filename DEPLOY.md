@@ -135,6 +135,6 @@ CNAME indicado. O HTTPS é emitido automaticamente.
   Para jogo aberto ao público, use no mínimo o `starter`.
 - **Uma instância:** o rate limit é em memória. Para escalar para mais de uma, adicione Redis.
 - **Backups:** o Neon guarda histórico (point-in-time restore) conforme o plano; confira a retenção.
-- **Pagamento continua MOCK** (`PAYMENTS_PROVIDER=mock`) até integrar o PSP.
+- **Pagamento:** `PAYMENTS_PROVIDER=sigilopay` com `SIGILOPAY_PUBLIC_KEY`, `SIGILOPAY_SECRET_KEY` e `PUBLIC_BASE_URL` (https). Sem essas chaves, deixe `mock`. O webhook é sempre `{PUBLIC_BASE_URL}/api/webhooks/payments`.
 - **Antes de aceitar dinheiro real:** autorização da SPA/MF (Lei 14.790/2023), KYC e jogo
   responsável. Validar com o jurídico.

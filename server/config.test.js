@@ -29,3 +29,9 @@ test('producao recusa pagamento simulado, TRUST_PROXY invalido e ADMIN_PHONES', 
   assert.match(load({ ...prod, NODE_ENV: 'production', TRUST_PROXY: 'true' }), /TRUST_PROXY/);
   assert.match(load({ ...prod, NODE_ENV: 'production', ADMIN_PHONES: '11999999999' }), /ADMIN_PHONES/);
 });
+
+test('producao com SigiloPay exige as chaves e a URL publica', () => {
+  const base = { ...prod, NODE_ENV: 'production', PAYMENTS_PROVIDER: 'sigilopay' };
+  assert.match(load(base), /SIGILOPAY_PUBLIC_KEY/);
+  assert.equal(load({ ...base, SIGILOPAY_PUBLIC_KEY: 'pub', SIGILOPAY_SECRET_KEY: 'sec', PUBLIC_BASE_URL: 'https://pipacombate.online' }), '');
+});
