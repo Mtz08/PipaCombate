@@ -96,6 +96,16 @@ export const CONFIG = {
     maps: ['laje', 'campinho', 'morro', 'praia', 'tempestade', 'noite'], // ids de public/js/data.js
     forca: 2.4,            // vida x2,4 e linha mais forte, a MESMA em toda rodada
     roundTtlMin: Number(env.ROUND_TTL_MIN) || 30, // round aberto alem disso e encerrado automaticamente
+    // Tres primeiras da conta, e as duas primeiras de cada dia (fuso de Brasilia)
+    // de quem ja jogou: mesma folga. O resto do dia usa o bloco de cima.
+    inicio: {
+      rodadas: 3,
+      rodadasDia: 2,
+      fuso: 'America/Sao_Paulo',
+      rtpBps: 9000,        // 90% de volta; a casa fica com cerca de 10%
+      forca: 1,            // rivais na forca normal, nao na de perda
+      pctX100: { moleque: 10, veloz: 15, aparador: 15, pesadao: 25, cortador: 20, chefe: 100, aparar: 5 },
+    },
   },
 
   signupBonusCents: Number(env.SIGNUP_BONUS_CENTS) || 0,

@@ -107,8 +107,8 @@ export const Api = {
   },
   active: () => call('game/active'),
   async start(stake, map) {
-    const [j, l] = await Promise.all([post('game/start', { betCents: stake, map }), call('game/lobby')]);
-    return { round: j.round.id, stake: j.round.betCents, balance: j.balanceCents, cfg: toCfg(l) };
+    const j = await post('game/start', { betCents: stake, map });
+    return { round: j.round.id, stake: j.round.betCents, balance: j.balanceCents, cfg: toCfg(j.regras) };
   },
   /* um corte confirmado pelo servidor; wind = true quando o vento virou */
   async cut(round, kind) {

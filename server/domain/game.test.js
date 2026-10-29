@@ -47,7 +47,7 @@ test('RTP do painel muda o sorteio: maior RTP, vento mais tarde', () => {
 
 test('corte soma ao multiplicador e cashout paga aposta x multiplicador', async () => {
   const u = await makeUser('1188880001', 100000);
-  const multX100 = 100 + CONFIG.game.pctX100.moleque;
+  const multX100 = 100 + CONFIG.game.inicio.pctX100.moleque;
   for (let i = 0; i < 40; i++) {
     const { round } = await start(u.id, { betCents: 1000 });
     const r = await cut(u.id, round.id, { kind: 'moleque' });
@@ -99,7 +99,7 @@ test('cortes rapidos demais sao recusados', async () => {
 
 test('cashout duplicado concorrente paga uma unica vez', async () => {
   const u = await makeUser('1188880006', 100000);
-  const premio = Math.floor((1000 * (100 + CONFIG.game.pctX100.moleque)) / 100);
+  const premio = Math.floor((1000 * (100 + CONFIG.game.inicio.pctX100.moleque)) / 100);
   let round, cortou;
   for (let i = 0; i < 40 && !cortou; i++) {
     ({ round } = await start(u.id, { betCents: 1000 }));
@@ -150,4 +150,49 @@ test('modo teste (so desenvolvimento): vento nunca vira e fica fora do ranking; 
     assert.equal((await Rounds.get(db, r2.id)).teste, false);
     await lose(u.id, r2.id, { reason: 'cut' });
   } finally { CONFIG.isProd = false; }
+});
+
+test('tres primeiras rodadas devolvem 90% e a quarta usa o RTP do painel', async () => {
+  const u = await makeUser('1188880033', 500000);
+  for (let i = 0; i < CONFIG.game.inicio.rodadas; i++) {
+    const { round, regras } = await start(u.id, { betCents: 1000 });
+    const gravada = await Rounds.get(db, round.id);
+    assert.equal(gravada.iniciante, true);
+    assert.equal(gravada.rtpBps, CONFIG.game.inicio.rtpBps);
+    assert.equal(regras.forca, CONFIG.game.inicio.forca);
+    assert.equal(regras.pct.moleque, CONFIG.game.inicio.pctX100.moleque / 100);
+    const corte = await cut(u.id, round.id, { kind: 'moleque' });
+    if (!corte.wind) assert.equal(corte.round.multiplier, 1 + CONFIG.game.inicio.pctX100.moleque / 100);
+    await lose(u.id, round.id, { reason: 'cut' });
+  }
+  const { round, regras } = await start(u.id, { betCents: 1000 });
+  const quarta = await Rounds.get(db, round.id);
+  assert.equal(quarta.iniciante, false);
+  assert.equal(quarta.rtpBps, CONFIG.game.rtpBps);
+  assert.equal(regras.forca, CONFIG.game.forca);
+  assert.equal(regras.pct.moleque, CONFIG.game.pctX100.moleque / 100);
+  await lose(u.id, round.id, { reason: 'cut' });
+});
+
+test('quem ja jogou tem as duas primeiras rodadas do dia na folga', async () => {
+  const u = await makeUser('1188880044', 500000);
+  for (let i = 0; i < CONFIG.game.inicio.rodadas; i++) {
+    const aberta = await start(u.id, { betCents: 1000 });
+    await lose(u.id, aberta.round.id, { reason: 'cut' });
+  }
+  await db.query("UPDATE rounds SET created_at = now() - interval '1 day' WHERE user_id = $1", [u.id]);
+  for (let i = 0; i < CONFIG.game.inicio.rodadasDia; i++) {
+    const { round, regras } = await start(u.id, { betCents: 1000 });
+    const gravada = await Rounds.get(db, round.id);
+    assert.equal(gravada.iniciante, true);
+    assert.equal(gravada.rtpBps, CONFIG.game.inicio.rtpBps);
+    assert.equal(regras.forca, CONFIG.game.inicio.forca);
+    await lose(u.id, round.id, { reason: 'cut' });
+  }
+  const { round, regras } = await start(u.id, { betCents: 1000 });
+  const dura = await Rounds.get(db, round.id);
+  assert.equal(dura.iniciante, false);
+  assert.equal(dura.rtpBps, CONFIG.game.rtpBps);
+  assert.equal(regras.forca, CONFIG.game.forca);
+  await lose(u.id, round.id, { reason: 'cut' });
 });

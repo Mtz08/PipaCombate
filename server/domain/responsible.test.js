@@ -17,8 +17,13 @@ after(async () => { await setSetting('jogo', null, null); await setSetting('limi
 test('parametros do jogo pelo painel: a rodada guarda o RTP com que foi sorteada', async () => {
   await setSetting('jogo', { rtpBps: 9200, maxMultX100: 3000 }, null);
   const u = await makeUser('1155550001', 100000);
+  for (let i = 0; i < CONFIG.game.inicio.rodadas; i++) {
+    const aberta = await start(u.id, { betCents: 1000 });
+    await lose(u.id, aberta.round.id, { reason: 'cut' });
+  }
   const { round } = await start(u.id, { betCents: 1000 });
   const r = await Rounds.get(db, round.id);
+  assert.equal(r.iniciante, false);
   assert.equal(r.rtpBps, 9200);
   assert.equal(r.maxMultX100, 3000);
   await lose(u.id, round.id, { reason: 'cut' });
@@ -43,6 +48,10 @@ test('limites de aposta e deposito vem do painel; configuracao invalida e recusa
   const livre = await setSetting('jogo', { rtpBps: 10000 }, null); // sem a faixa 90–99%
   assert.equal(livre.rtpBps, 10000);
   const u2 = await makeUser('1155550099', 100000);
+  for (let i = 0; i < CONFIG.game.inicio.rodadas; i++) {
+    const previa = await start(u2.id, { betCents: 1000 });
+    await lose(u2.id, previa.round.id, { reason: 'cut' });
+  }
   const { round: r2 } = await start(u2.id, { betCents: 1000 });
   const saved = await Rounds.get(db, r2.id);
   assert.equal(saved.rtpBps, 10000);

@@ -93,7 +93,7 @@ const mapRound = (r) => r && {
   seedId: r.seed_id, nonce: r.nonce, forfeit: r.forfeit,
   ceilingX100: r.ceiling_x100, multX100: r.mult_x100, counts: r.counts || {},
   lastCutAt: ms(r.last_cut_at), endReason: r.end_reason,
-  rtpBps: r.rtp_bps ?? 9600, maxMultX100: r.max_mult_x100 ?? 5000, teste: !!r.teste,
+  rtpBps: r.rtp_bps ?? 9600, maxMultX100: r.max_mult_x100 ?? 5000, teste: !!r.teste, iniciante: !!r.iniciante,
 };
 
 export const Rounds = {
@@ -105,11 +105,25 @@ export const Rounds = {
       "SELECT * FROM rounds WHERE user_id = $1 AND state = 'open'", [userId],
     ))[0]) || null;
   },
-  async create(q, { userId, betCents, map, seedId, nonce, ceilingX100, rtpBps = 9600, maxMultX100 = 5000, teste = false }) {
+  async countByUser(q, userId) {
+    const row = (await q.query('SELECT count(*)::int AS n FROM rounds WHERE user_id = $1', [userId]))[0];
+    return Number(row?.n || 0);
+  },
+  /** Rodadas abertas hoje no fuso pedido (ex.: America/Sao_Paulo). */
+  async countToday(q, userId, fuso) {
+    const row = (await q.query(
+      `SELECT count(*)::int AS n FROM rounds
+        WHERE user_id = $1
+          AND (created_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date`,
+      [userId, fuso],
+    ))[0];
+    return Number(row?.n || 0);
+  },
+  async create(q, { userId, betCents, map, seedId, nonce, ceilingX100, rtpBps = 9600, maxMultX100 = 5000, teste = false, iniciante = false }) {
     return mapRound((await q.query(
-      `INSERT INTO rounds (user_id, bet_cents, map, seed_id, nonce, ceiling_x100, rtp_bps, max_mult_x100, teste)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [userId, betCents, map, seedId, nonce, ceilingX100, rtpBps, maxMultX100, teste],
+      `INSERT INTO rounds (user_id, bet_cents, map, seed_id, nonce, ceiling_x100, rtp_bps, max_mult_x100, teste, iniciante)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [userId, betCents, map, seedId, nonce, ceilingX100, rtpBps, maxMultX100, teste, iniciante],
     ))[0]);
   },
   /** Registra um corte: soma ao multiplicador e a contagem do tipo. */

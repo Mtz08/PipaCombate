@@ -7,10 +7,11 @@
 //   Quem recolheu antes leva aposta x multiplicador.
 // - Se um rival corta a pipa do jogador, aposta perdida.
 //
-// GARANTIA: sacar em qualquer multiplicador m tem retorno esperado <= RTP.
-// Com RTP 35%, a casa ganha pelo menos ~65% das rodadas em saque >= 1,00x.
+// GARANTIA: sacar em qualquer multiplicador m tem retorno esperado <= RTP
+// daquela rodada. Nas 3 primeiras da conta, e nas 2 primeiras de cada dia
+// de quem ja jogou, o RTP e 90% e os rivais sao mais fracos. No resto o
+// RTP do painel vale (padrao 35%).
 // Cliente adulterado que "invente" cortes so faz o vento virar mais cedo.
-// Os rivais tem a mesma forca em todo round.
 
 import { db, withUserLock, isUuid, isUniqueViolation } from '../db/index.js';
 import { Rounds, FairSeeds } from '../db/repos.js';
@@ -32,18 +33,51 @@ export const prizeFor = (betCents, multX100) => Math.floor((betCents * multX100)
 /** Modo teste: SO fora de producao. Em producao a flag e ignorada (sorteio sempre valendo). */
 export const isTestMode = (user) => !CONFIG.isProd && !!user?.testAlwaysWin;
 
+/** Regras da rodada: conta nova ou as primeiras do dia usam o bloco inicio. */
+export function regrasDaConta(g, { teste, iniciante }) {
+  const facil = iniciante && !teste;
+  const pctX100 = facil ? CONFIG.game.inicio.pctX100 : g.pctX100;
+  return {
+    rtpBps: facil ? CONFIG.game.inicio.rtpBps : g.rtpBps,
+    maxMultX100: g.maxMultX100,
+    forca: teste ? 0.5 : facil ? CONFIG.game.inicio.forca : g.forca,
+    pctX100,
+    betMinCents: g.betMinCents,
+    betMaxCents: g.betMaxCents,
+    iniciante: facil,
+  };
+}
+
+function viewRegras(regras, teste) {
+  return {
+    modoTeste: teste,
+    maps: MAPS,
+    rtpPct: regras.rtpBps / 100,
+    maxMult: regras.maxMultX100 / 100,
+    forca: regras.forca,
+    pct: Object.fromEntries(KINDS.map((k) => [k, regras.pctX100[k] / 100])),
+    betMinCents: regras.betMinCents,
+    betMaxCents: regras.betMaxCents,
+    iniciante: regras.iniciante,
+  };
+}
+
+/** Proxima rodada (ou a aberta) entra na folga: 3 da conta, ou 2 do dia. */
+async function proximaFacil(t, userId) {
+  const open = await Rounds.openByUser(t, userId);
+  if (open) return !!open.iniciante;
+  const feitas = await Rounds.countByUser(t, userId);
+  if (feitas < CONFIG.game.inicio.rodadas) return true;
+  const hoje = await Rounds.countToday(t, userId, CONFIG.game.inicio.fuso);
+  return hoje < CONFIG.game.inicio.rodadasDia;
+}
+
 export async function lobby(user = null) {
   const g = await getSetting('jogo');
   const teste = isTestMode(user);
+  const iniciante = user && !teste ? await proximaFacil(db, user.id) : false;
   return {
-    modoTeste: teste, // o front mostra a faixa "MODO TESTE"
-    maps: MAPS,
-    rtpPct: g.rtpBps / 100,
-    maxMult: g.maxMultX100 / 100,
-    forca: teste ? 0.5 : g.forca, // modo teste: rivais fracos
-    pct: Object.fromEntries(KINDS.map((k) => [k, g.pctX100[k] / 100])),
-    betMinCents: g.betMinCents,
-    betMaxCents: g.betMaxCents,
+    ...viewRegras(regrasDaConta(g, { teste, iniciante }), teste),
     top: (await Rounds.topWins(db, { days: 7, limit: 10 })).map((r) => ({ ...r, name: publicName(r.name) })),
   };
 }
@@ -75,14 +109,21 @@ export async function start(userId, { betCents, map }) {
       const nonce = await FairSeeds.takeNonce(t, seed.id);
       // modo teste (so desenvolvimento): teto acima do ganho maximo = o vento nunca vira
       const teste = isTestMode(user);
-      const ceilingX100 = teste ? g.maxMultX100 + 1 : windPoint(seed.serverSeed, seed.clientSeed, nonce, g.rtpBps, g.maxMultX100);
+      const feitas = await Rounds.countByUser(t, userId);
+      const hoje = feitas < CONFIG.game.inicio.rodadas ? 0 : await Rounds.countToday(t, userId, CONFIG.game.inicio.fuso);
+      const regras = regrasDaConta(g, {
+        teste,
+        iniciante: feitas < CONFIG.game.inicio.rodadas || hoje < CONFIG.game.inicio.rodadasDia,
+      });
+      const ceilingX100 = teste ? g.maxMultX100 + 1 : windPoint(seed.serverSeed, seed.clientSeed, nonce, regras.rtpBps, regras.maxMultX100);
       const round = await Rounds.create(t, {
-        userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100, rtpBps: g.rtpBps, maxMultX100: g.maxMultX100, teste,
+        userId, betCents: bet, map: chosenMap, seedId: seed.id, nonce, ceilingX100,
+        rtpBps: regras.rtpBps, maxMultX100: regras.maxMultX100, teste, iniciante: regras.iniciante,
       });
       const balanceAfter = await applyDebit(t, user, bet, 'bet', { roundId: round.id, map: chosenMap });
       // cada aposta desconta do rollover pendente do deposito
       if (user.wagerRequiredCents > 0) await t.query('UPDATE users SET wager_required_cents = GREATEST(0, wager_required_cents - $2) WHERE id = $1', [userId, bet]);
-      return { round: viewRound(round), balanceCents: balanceAfter };
+      return { round: viewRound(round), balanceCents: balanceAfter, regras: viewRegras(regras, teste) };
     });
   } catch (err) {
     if (isUniqueViolation(err, 'rounds_one_open_per_user')) throw roundOpenError();
@@ -103,7 +144,8 @@ export async function cut(userId, roundId, { kind } = {}) {
       throw domainError('TOO_FAST', 'Corte muito rapido', 429);
     }
     const g = await getSetting('jogo', t);
-    const next = Math.min(round.multX100 + g.pctX100[kind], round.maxMultX100);
+    const pctX100 = round.iniciante ? CONFIG.game.inicio.pctX100 : g.pctX100;
+    const next = Math.min(round.multX100 + pctX100[kind], round.maxMultX100);
     if (next >= round.ceilingX100) {
       await Rounds.recordCut(t, round.id, kind, next);
       const closed = await Rounds.close(t, round.id, 'lost', 0, 'wind');
