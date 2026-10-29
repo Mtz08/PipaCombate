@@ -84,13 +84,18 @@ export const CONFIG = {
   // Parametros matematicos do jogo. RTP (retorno ao jogador) no padrao de
   // mercado (95-97%). Ver domain/game.js para a derivacao do multiplicador.
   game: {
-    rtpBps: 9000,          // 90,00%: retorno esperado de QUALQUER estrategia de saque (margem da casa 10%)
+    // 25,00% devolvido ao jogador. Sacar em qualquer multiplicador m >= 1,00x
+    // perde a rodada em pelo menos ~75% das vezes: P(vento > m) <= 0,25 / m.
+    // A casa fica com 75% do apostado, seja qual for a estrategia.
+    rtpBps: 2500,
     maxMultX100: 5000,     // teto absoluto 50,00x
     minCutIntervalMs: 250, // cortes mais rapidos que isso sao recusados (anti-automacao)
-    // somado ao multiplicador a cada corte, por tipo (centesimos: 10 = +0,10x)
-    pctX100: { moleque: 10, veloz: 15, aparador: 15, pesadao: 25, cortador: 20, chefe: 100, aparar: 5 },
+    // somado ao multiplicador a cada corte, por tipo (centesimos: 5 = +0,05x).
+    // Passos menores: o primeiro saque fica perto de 1,05x, onde a casa ainda
+    // ganha ~76% das rodadas. Chefao nao pula 1,00x de uma vez.
+    pctX100: { moleque: 5, veloz: 8, aparador: 8, pesadao: 12, cortador: 10, chefe: 50, aparar: 3 },
     maps: ['laje', 'campinho', 'morro', 'praia', 'tempestade', 'noite'], // ids de public/js/data.js
-    forca: 1.4,            // forca das linhas rivais: a MESMA em toda rodada (ajusta a dificuldade)
+    forca: 2.4,            // vida x2,4 e linha mais forte, a MESMA em toda rodada
     roundTtlMin: Number(env.ROUND_TTL_MIN) || 30, // round aberto alem disso e encerrado automaticamente
   },
 

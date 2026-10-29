@@ -10,7 +10,7 @@ import { CONFIG } from '../config.js';
 
 const SEED = 'a'.repeat(64);
 
-test('vento e deterministico, >= RTP (ex.: 0,90x) e <= teto de 50x', () => {
+test('vento e deterministico, >= RTP (ex.: 0,25x) e <= teto de 50x', () => {
   assert.equal(windPoint(SEED, 'abc', 0), windPoint(SEED, 'abc', 0));
   for (let i = 0; i < 5000; i++) {
     const w = windPoint(SEED, 'abc', i);

@@ -1177,7 +1177,7 @@ function beginRun(bet) {
   run = newRun(false);
   run.bet = bet; run.practice = !bet;
   // Força das linhas rivais: um valor só, igual em toda rodada, apostada ou treino.
-  run.forca = +((acct && acct.cfg && acct.cfg.forca) || 1.4);
+  run.forca = +((acct && acct.cfg && acct.cfg.forca) || 2.4);
   run.cutQ = Promise.resolve(); run.cutAt = 0; run.windT = 0;
   spawnPlayer(); startWave(1);
   warmTexts();

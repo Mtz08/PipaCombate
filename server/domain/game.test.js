@@ -20,6 +20,10 @@ test('RTP teorico: sacar em m tem retorno P(vento > m) * m ~= RTP configurado', 
     const alvo = CONFIG.game.rtpBps / 10000;
     assert.ok(Math.abs(rtp - alvo) < 0.03, `m=${m} rtp=${rtp} alvo=${alvo}`);
   }
+  // Em 1,00x a casa ganha cerca de 75% das rodadas (1 - RTP).
+  let perdas = 0;
+  for (let i = 0; i < N; i++) if (!(windPoint('a'.repeat(64), 'casa', i) > 100)) perdas++;
+  assert.ok(Math.abs(perdas / N - 0.75) < 0.02, `casa ganhou ${perdas / N}`);
 });
 
 test('RTP do painel muda o sorteio: maior RTP, vento mais tarde', () => {
@@ -43,18 +47,20 @@ test('RTP do painel muda o sorteio: maior RTP, vento mais tarde', () => {
 
 test('corte soma ao multiplicador e cashout paga aposta x multiplicador', async () => {
   const u = await makeUser('1188880001', 100000);
-  for (;;) {
+  const multX100 = 100 + CONFIG.game.pctX100.moleque;
+  for (let i = 0; i < 40; i++) {
     const { round } = await start(u.id, { betCents: 1000 });
     const r = await cut(u.id, round.id, { kind: 'moleque' });
-    if (r.wind) continue; // vento virou no 1o corte (raro): tenta de novo
-    assert.equal(r.round.multiplier, 1.1);
+    if (r.wind) continue; // ~75% das rodadas o vento ja esta em 1,00x ou menos
+    assert.equal(r.round.multiplier, multX100 / 100);
     const before = await balanceOf(u.id);
     const c = await cashout(u.id, round.id);
-    assert.equal(c.prizeCents, 1100);
-    assert.equal(await balanceOf(u.id), before + 1100);
-    assert.ok(c.round.wind > 1.1); // vento revelado no fim
+    assert.equal(c.prizeCents, Math.floor((1000 * multX100) / 100));
+    assert.equal(await balanceOf(u.id), before + c.prizeCents);
+    assert.ok(c.round.wind > multX100 / 100); // vento revelado no fim
     return;
   }
+  assert.fail('nenhuma rodada sobreviveu ao primeiro corte');
 });
 
 test('vento vira quando o multiplicador alcanca o ponto sorteado', async () => {
@@ -93,15 +99,17 @@ test('cortes rapidos demais sao recusados', async () => {
 
 test('cashout duplicado concorrente paga uma unica vez', async () => {
   const u = await makeUser('1188880006', 100000);
-  let round;
-  for (;;) {
+  const premio = Math.floor((1000 * (100 + CONFIG.game.pctX100.moleque)) / 100);
+  let round, cortou;
+  for (let i = 0; i < 40 && !cortou; i++) {
     ({ round } = await start(u.id, { betCents: 1000 }));
-    if (!(await cut(u.id, round.id, { kind: 'moleque' })).wind) break;
+    cortou = !(await cut(u.id, round.id, { kind: 'moleque' })).wind;
   }
+  assert.equal(cortou, true);
   const before = await balanceOf(u.id);
   const res = await Promise.allSettled([cashout(u.id, round.id), cashout(u.id, round.id)]);
   assert.equal(res.filter((r) => r.status === 'fulfilled').length, 1);
-  assert.equal(await balanceOf(u.id), before + 1100);
+  assert.equal(await balanceOf(u.id), before + premio);
 });
 
 test('ranking: so saques com lucro, maior lucro primeiro e nome abreviado', async () => {
@@ -129,7 +137,8 @@ test('modo teste (so desenvolvimento): vento nunca vira e fica fora do ranking; 
   const u = await makeUser('1188880077', 1000000);
   await db.query('UPDATE users SET test_always_win = true WHERE id = $1', [u.id]);
   const { round } = await start(u.id, { betCents: 1000 });
-  for (let i = 0; i < 60; i++) assert.equal((await cut(u.id, round.id, { kind: 'chefe' })).wind, false); // passa do teto de 50x sem virar
+  const cortes = Math.ceil((CONFIG.game.maxMultX100 - 100) / CONFIG.game.pctX100.chefe);
+  for (let i = 0; i < cortes; i++) assert.equal((await cut(u.id, round.id, { kind: 'chefe' })).wind, false); // chega no teto de 50x sem o vento virar
   const c = await cashout(u.id, round.id);
   assert.equal(c.prizeCents, 1000 * CONFIG.game.maxMultX100 / 100);
   assert.equal((await Rounds.get(db, round.id)).teste, true);

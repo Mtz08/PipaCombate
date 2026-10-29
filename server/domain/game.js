@@ -7,9 +7,10 @@
 //   Quem recolheu antes leva aposta x multiplicador.
 // - Se um rival corta a pipa do jogador, aposta perdida.
 //
-// GARANTIA: sacar em qualquer multiplicador tem retorno esperado <= RTP, seja
-// qual for a habilidade. Cliente adulterado que "invente" cortes so faz o vento
-// virar mais cedo. Os rivais tem a mesma forca em todo round.
+// GARANTIA: sacar em qualquer multiplicador m tem retorno esperado <= RTP.
+// Com RTP 25%, a casa ganha pelo menos ~75% das rodadas em saque >= 1,00x.
+// Cliente adulterado que "invente" cortes so faz o vento virar mais cedo.
+// Os rivais tem a mesma forca em todo round.
 
 import { db, withUserLock, isUuid, isUniqueViolation } from '../db/index.js';
 import { Rounds, FairSeeds } from '../db/repos.js';

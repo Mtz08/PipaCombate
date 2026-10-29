@@ -81,12 +81,12 @@ test('modelo revshare: % do resultado da casa, negativo quando o indicado ganha'
   assert.equal(await balanceOf(db, c.id), 100);
 
   let esperado = 100;
-  for (;;) { // uma rodada vencedora: aposta 1000, recolhe com +100% (premio 2000)
+  for (;;) { // uma rodada em que o indicado saca: a casa perde aposta - premio
     const { round } = await start(d.id, { betCents: 1000 });
     const k = await cut(d.id, round.id, { kind: 'chefe' });
-    if (k.wind) { esperado += 100; continue; } // vento virou: casa ganhou 1000
-    await cashout(d.id, round.id);
-    esperado -= 100; // casa perdeu 1000
+    if (k.wind) { esperado += 100; continue; } // vento virou: casa ganhou 1000, 10% = 100
+    const pago = await cashout(d.id, round.id);
+    esperado += Math.trunc(((1000 - pago.prizeCents) * 10) / 100);
     break;
   }
   assert.equal(await balanceOf(db, c.id), esperado);
