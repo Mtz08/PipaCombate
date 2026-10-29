@@ -36,11 +36,12 @@ export const isTestMode = (user) => !CONFIG.isProd && !!user?.testAlwaysWin;
 /** Regras da rodada: conta nova ou as primeiras do dia usam o bloco inicio. */
 export function regrasDaConta(g, { teste, iniciante }) {
   const facil = iniciante && !teste;
-  const pctX100 = facil ? CONFIG.game.inicio.pctX100 : g.pctX100;
+  const ini = g.inicio;
+  const pctX100 = facil ? ini.pctX100 : g.pctX100;
   return {
-    rtpBps: facil ? CONFIG.game.inicio.rtpBps : g.rtpBps,
+    rtpBps: facil ? ini.rtpBps : g.rtpBps,
     maxMultX100: g.maxMultX100,
-    forca: teste ? 0.5 : facil ? CONFIG.game.inicio.forca : g.forca,
+    forca: teste ? 0.5 : facil ? ini.forca : g.forca,
     pctX100,
     betMinCents: g.betMinCents,
     betMaxCents: g.betMaxCents,
@@ -66,10 +67,11 @@ function viewRegras(regras, teste) {
 async function proximaFacil(t, userId) {
   const open = await Rounds.openByUser(t, userId);
   if (open) return !!open.iniciante;
+  const g = await getSetting('jogo', t);
   const feitas = await Rounds.countByUser(t, userId);
-  if (feitas < CONFIG.game.inicio.rodadas) return true;
+  if (feitas < g.inicio.rodadas) return true;
   const hoje = await Rounds.countToday(t, userId, CONFIG.game.inicio.fuso);
-  return hoje < CONFIG.game.inicio.rodadasDia;
+  return hoje < g.inicio.rodadasDia;
 }
 
 export async function lobby(user = null) {
@@ -110,10 +112,10 @@ export async function start(userId, { betCents, map }) {
       // modo teste (so desenvolvimento): teto acima do ganho maximo = o vento nunca vira
       const teste = isTestMode(user);
       const feitas = await Rounds.countByUser(t, userId);
-      const hoje = feitas < CONFIG.game.inicio.rodadas ? 0 : await Rounds.countToday(t, userId, CONFIG.game.inicio.fuso);
+      const hoje = feitas < g.inicio.rodadas ? 0 : await Rounds.countToday(t, userId, CONFIG.game.inicio.fuso);
       const regras = regrasDaConta(g, {
         teste,
-        iniciante: feitas < CONFIG.game.inicio.rodadas || hoje < CONFIG.game.inicio.rodadasDia,
+        iniciante: feitas < g.inicio.rodadas || hoje < g.inicio.rodadasDia,
       });
       const ceilingX100 = teste ? g.maxMultX100 + 1 : windPoint(seed.serverSeed, seed.clientSeed, nonce, regras.rtpBps, regras.maxMultX100);
       const round = await Rounds.create(t, {
@@ -144,7 +146,7 @@ export async function cut(userId, roundId, { kind } = {}) {
       throw domainError('TOO_FAST', 'Corte muito rapido', 429);
     }
     const g = await getSetting('jogo', t);
-    const pctX100 = round.iniciante ? CONFIG.game.inicio.pctX100 : g.pctX100;
+    const pctX100 = round.iniciante ? g.inicio.pctX100 : g.pctX100;
     const next = Math.min(round.multX100 + pctX100[kind], round.maxMultX100);
     if (next >= round.ceilingX100) {
       await Rounds.recordCut(t, round.id, kind, next);

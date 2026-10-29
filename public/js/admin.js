@@ -56,7 +56,7 @@ async function boot() {
       <p class="hint">O valor ja saiu do saldo do jogador. Aprovar envia o PIX; recusar devolve o valor ao saldo.</p>
       <ul id="wq" class="ledger"></ul><p id="wqMsg" class="msg"></p></section>
     <section class="card"><h2>Jogo</h2>
-      <p class="hint">Vale para as próximas rodadas. Cada rodada guarda o RTP e o teto com que foi sorteada, então a verificação das antigas continua batendo.</p>
+      <p class="hint">O primeiro bloco é o jogo normal. O bloco “rodadas fáceis” vale nas primeiras da conta e nas primeiras de cada dia. Cada rodada guarda o RTP com que foi sorteada.</p>
       <form id="fJogo" class="aff-form"></form></section>
     <section class="card"><h2>Limites de depósito e saque</h2><form id="fLim" class="aff-form"></form></section>
     <section class="card"><h2>Bônus de primeiro depósito</h2>
@@ -102,6 +102,11 @@ const JOGO = [
   ['rtpBps', 'RTP (% devolvido em média)', 'pct'], ['maxMultX100', 'Ganho máximo por rodada (x a aposta)', 'mult'],
   ['forca', 'Força dos rivais (1 = normal)', 'num'], ['betMinCents', 'Aposta mínima R$', 'reais'], ['betMaxCents', 'Aposta máxima R$', 'reais'],
   ...RIVAIS.map((k) => [`pctX100.${k}`, `% por corte: ${k}`, 'pctx']),
+  ['inicio.rodadas', 'Rodadas fáceis da conta (as primeiras)', 'pctx'],
+  ['inicio.rodadasDia', 'Rodadas fáceis por dia (quem já jogou)', 'pctx'],
+  ['inicio.rtpBps', 'RTP dessas rodadas (%)', 'pct'],
+  ['inicio.forca', 'Força dos rivais nessas rodadas (1 = normal)', 'num'],
+  ...RIVAIS.map((k) => [`inicio.pctX100.${k}`, `% por corte nessas rodadas: ${k}`, 'pctx']),
 ];
 const LIMITES = [
   ['depositMinCents', 'Depósito mínimo R$', 'reais'], ['depositMaxCents', 'Depósito máximo R$', 'reais'],

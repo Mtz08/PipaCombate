@@ -73,17 +73,35 @@ export const SCHEMAS = {
       forca: CONFIG.game.forca,
       betMinCents: CONFIG.limits.betMinCents,
       betMaxCents: CONFIG.limits.betMaxCents,
+      inicio: {
+        rodadas: CONFIG.game.inicio.rodadas,
+        rodadasDia: CONFIG.game.inicio.rodadasDia,
+        rtpBps: CONFIG.game.inicio.rtpBps,
+        forca: CONFIG.game.inicio.forca,
+        pctX100: { ...CONFIG.game.inicio.pctX100 },
+      },
     }),
     validar(v) {
-      const pct = {};
-      for (const k of KINDS) pct[k] = int(v.pctX100?.[k], 1, 500, `% do ${k}`);
+      const pctDe = (src, nome) => {
+        const pct = {};
+        for (const k of KINDS) pct[k] = int(src?.[k], 1, 500, `% do ${k} (${nome})`);
+        return pct;
+      };
+      const ini = v.inicio || {};
       const out = {
         rtpBps: int(v.rtpBps, 0, 1000000, 'RTP (centesimos de %)'),
         maxMultX100: int(v.maxMultX100, 200, 10000, 'ganho maximo'),
-        pctX100: pct,
+        pctX100: pctDe(v.pctX100, 'jogo normal'),
         forca: num(v.forca, 0.5, 3, 'forca dos rivais'),
         betMinCents: int(v.betMinCents, 100, 10000000, 'aposta minima'),
         betMaxCents: int(v.betMaxCents, 100, 10000000, 'aposta maxima'),
+        inicio: {
+          rodadas: int(ini.rodadas, 0, 100, 'rodadas faceis da conta'),
+          rodadasDia: int(ini.rodadasDia, 0, 100, 'rodadas faceis do dia'),
+          rtpBps: int(ini.rtpBps, 0, 1000000, 'RTP das rodadas faceis'),
+          forca: num(ini.forca, 0.5, 3, 'forca nas rodadas faceis'),
+          pctX100: pctDe(ini.pctX100, 'rodadas faceis'),
+        },
       };
       if (out.betMaxCents < out.betMinCents) throw bad('aposta maxima menor que a minima');
       return out;
