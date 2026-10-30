@@ -243,7 +243,7 @@ function tipoChave(key) {
   if (digitos.length === 11) return 'CPF';
   return 'Chave';
 }
-const campoPagamento = (rotulo, valor) => `<div class="pay-row"><span>${esc(rotulo)}</span><code>${esc(valor)}</code><button type="button" class="copy" data-copy="${esc(valor)}">Copiar</button></div>`;
+const campoPagamento = (rotulo, valor, extra = '') => `<div class="pay-box ${extra}"><span>${esc(rotulo)}</span><div class="line"><code>${esc(valor)}</code><button type="button" class="copy" data-copy="${esc(valor)}">Copiar</button></div></div>`;
 
 async function withdrawals() {
   const { withdrawals: list } = await api('withdrawals');
@@ -251,12 +251,11 @@ async function withdrawals() {
   $('#wq').innerHTML = list.map((w) => {
     const ip = w.clientIp && w.clientIp !== '::1' && w.clientIp !== '127.0.0.1' ? w.clientIp : '';
     return `<li class="payout" data-id="${esc(w.id)}">
-      <div class="payout-head"><b>${brl(w.amountCents)}</b><small>${esc(w.userName)} · ${w.source === 'affiliate' ? 'comissão' : 'saldo do jogo'}</small></div>
-      ${campoPagamento('Valor', reaisSolto(w.amountCents))}
-      ${campoPagamento('Nome', w.userName || '')}
-      ${campoPagamento(tipoChave(w.pixKey), w.pixKey || '')}
+      <div class="payout-head"><b>${brl(w.amountCents)}</b><small>${esc(w.userName)}<br>${w.source === 'affiliate' ? 'comissão' : 'saldo do jogo'}</small></div>
+      ${campoPagamento('Chave PIX · ' + tipoChave(w.pixKey), w.pixKey || '', 'chave')}
       ${campoPagamento('CPF', cpfBonito(w.cpf))}
-      ${campoPagamento('Telefone', w.userPhone || '')}
+      ${campoPagamento('Valor para digitar', reaisSolto(w.amountCents))}
+      ${campoPagamento('Telefone da conta', w.userPhone || '')}
       <p class="meta">Pedido em ${dt(w.createdAt)} · conta desde ${new Date(w.userSince).toLocaleDateString('pt-BR')} · saldo restante ${brl(w.userBalanceCents)}${ip ? ` · IP ${esc(ip)}` : ''}</p>
       <span class="row"><button class="cash" data-a="approve">Marcar como pago</button><button data-a="reject">Recusar</button><button class="link" data-a="user">ver jogador</button></span>
     </li>`;
