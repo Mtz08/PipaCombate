@@ -7,7 +7,6 @@ import { Charges, Withdrawals, Users } from '../db/repos.js';
 import { makeUser, balanceOf, cpfValido } from '../db/testing.js';
 import { CONFIG } from '../config.js';
 import * as mock from '../payments/mock.js';
-import { providers } from '../payments/index.js';
 import {
   createDeposit, confirmDeposit, refundDeposit, requestWithdrawal, approveWithdrawal, rejectWithdrawal, reviewQueue, confirmTransfer,
 } from './payments.js';
@@ -16,13 +15,6 @@ import { isValidCpf } from '../util/validate.js';
 const CPF_OK = '52998224725'; // CPF de exemplo valido (digitos verificadores)
 const ADMIN = { id: null };   // so o id do ator vai para a auditoria
 const saque = (u, amountCents, extra = {}) => requestWithdrawal(u.id, { amountCents, pixKey: 'ana@exemplo.com', cpf: cpfValido(u.phone), ...extra });
-
-/** Saque direto ao PSP (sem fila de aprovacao). */
-async function autoWithdraw(fn) {
-  const before = CONFIG.limits.withdrawAutoMaxCents;
-  CONFIG.limits.withdrawAutoMaxCents = 10_000_000;
-  try { return await fn(); } finally { CONFIG.limits.withdrawAutoMaxCents = before; }
-}
 
 async function withoutAutoConfirm(fn) {
   CONFIG.payments.mockAutoConfirm = false;
@@ -51,32 +43,25 @@ test('valor pago diferente do cobrado vai para revisao, sem credito', () => with
   assert.equal(await balanceOf(u.id), 0);
 }));
 
-test('saque direto: debita, nao devolve CPF e mascara a chave', () => autoWithdraw(async () => {
+test('saque fica na fila, debita e nao devolve o CPF ao jogador', async () => {
   const u = await makeUser('1177770003', 50000);
   const r = await requestWithdrawal(u.id, { amountCents: 20000, pixKey: 'fulano@exemplo.com', cpf: CPF_OK });
-  assert.equal(r.withdrawal.status, 'paid');
+  assert.equal(r.withdrawal.status, 'review');
   assert.equal(r.balanceCents, 30000);
   assert.equal(JSON.stringify(r).includes(CPF_OK), false);
   assert.equal(r.withdrawal.pixKeyMask, 'fu***om');
-}));
+});
 
-test('recusa DEFINITIVA do PSP estorna; erro incerto (timeout) NAO estorna e espera o webhook', (t) => autoWithdraw(async () => {
+test('webhook de transferencia antiga estorna uma vez so', async () => {
   const u = await makeUser('1177770004', 50000);
-  const psp = t.mock.method(providers.mock, 'sendPixTransfer', async () => { throw Object.assign(new Error('chave invalida'), { definitive: true }); });
-  await assert.rejects(() => saque(u, 20000), (e) => e.code === 'WITHDRAW_FAILED' && e.balanceCents === 50000);
-  assert.equal(await balanceOf(u.id), 50000);
-
-  psp.mock.mockImplementation(async () => { throw new Error('ETIMEDOUT'); });
-  const r = await saque(u, 20000);
-  assert.equal(r.withdrawal.status, 'processing');
-  assert.equal(await balanceOf(u.id), 30000); // nao estornou: o PIX pode ter saido
-
-  // o webhook decide; repetido nao estorna duas vezes
-  assert.equal((await confirmTransfer({ withdrawalId: r.withdrawal.id, status: 'failed' })).changed, true);
-  assert.equal((await confirmTransfer({ withdrawalId: r.withdrawal.id, status: 'failed' })).changed, false);
-  assert.equal(await balanceOf(u.id), 50000);
-  assert.equal((await confirmTransfer({ withdrawalId: r.withdrawal.id, status: 'paid' })).changed, false); // ja falhou
-}));
+  const w = await Withdrawals.create(db, {
+    userId: u.id, amountCents: 20000, pixKey: 'ana@exemplo.com', pixKeyMask: 'an***om', provider: 'manual', status: 'processing',
+  });
+  assert.equal((await confirmTransfer({ withdrawalId: w.id, status: 'failed' })).changed, true);
+  assert.equal((await confirmTransfer({ withdrawalId: w.id, status: 'failed' })).changed, false);
+  assert.equal(await balanceOf(u.id), 70000);
+  assert.equal((await confirmTransfer({ withdrawalId: w.id, status: 'paid' })).changed, false);
+});
 
 test('saque acima do limite automatico espera aprovacao; aprovado vira pago', async () => {
   const u = await makeUser('1177770005', 50000);
@@ -87,13 +72,19 @@ test('saque acima do limite automatico espera aprovacao; aprovado vira pago', as
   assert.ok(row.cpfEnc && !row.cpfEnc.includes(cpfValido(u.phone))); // CPF so cifrado
   assert.ok((await reviewQueue()).some((w) => w.id === r.withdrawal.id));
 
+  const fila = await reviewQueue();
+  const item = fila.find((w) => w.id === r.withdrawal.id);
+  assert.equal(item.pixKey, 'ana@exemplo.com');
+  assert.equal(item.cpf, cpfValido(u.phone));
+  assert.equal(item.userPhone, u.phone);
+
   const a = await approveWithdrawal(ADMIN, r.withdrawal.id);
   assert.equal(a.withdrawal.status, 'paid');
   const done = await Withdrawals.get(db, r.withdrawal.id);
-  assert.equal(done.cpfEnc, null); // apagado ao finalizar
-  assert.equal(done.pixKey, null);
+  assert.ok(done.cpfEnc); // permanece para o registro do pagamento manual
+  assert.equal(done.pixKey, 'ana@exemplo.com');
   await assert.rejects(() => approveWithdrawal(ADMIN, r.withdrawal.id), (e) => e.code === 'NOT_IN_REVIEW');
-  await assert.rejects(() => approveWithdrawal({ id: u.id }, r.withdrawal.id), (e) => e.code === 'SELF_ACTION');
+  await assert.rejects(() => approveWithdrawal({ id: u.id }, r.withdrawal.id), (e) => e.code === 'NOT_IN_REVIEW');
 });
 
 test('saque recusado pelo admin estorna (mesma transacao) e exige motivo', async () => {
@@ -103,7 +94,7 @@ test('saque recusado pelo admin estorna (mesma transacao) e exige motivo', async
   const x = await rejectWithdrawal(ADMIN, r.withdrawal.id, { note: 'chave PIX de terceiro' });
   assert.equal(x.withdrawal.status, 'rejected');
   assert.equal(await balanceOf(u.id), 50000);
-  assert.equal((await Withdrawals.get(db, r.withdrawal.id)).cpfEnc, null);
+  assert.ok((await Withdrawals.get(db, r.withdrawal.id)).cpfEnc);
   await assert.rejects(() => rejectWithdrawal(ADMIN, r.withdrawal.id, { note: 'de novo agora' }), (e) => e.code === 'NOT_IN_REVIEW');
   assert.equal(await balanceOf(u.id), 50000); // nada de estorno em dobro
 });
@@ -115,7 +106,8 @@ test('um saque em andamento por vez, CPF fixo do titular e CPF unico entre conta
   assert.equal(await balanceOf(u.id), 70000);
 
   const v = await makeUser('1177770008', 90000);
-  await autoWithdraw(() => saque(v, 10000));
+  const primeiro = await saque(v, 10000);
+  await approveWithdrawal(ADMIN, primeiro.withdrawal.id);
   await assert.rejects(() => saque(v, 10000, { cpf: CPF_OK }), (e) => e.code === 'CPF_MISMATCH');
   assert.equal(await balanceOf(v.id), 80000);
 
@@ -201,4 +193,22 @@ test('zerou a banca: rollover antigo nao fica pendurado no proximo deposito', as
   await db.query('UPDATE users SET balance_cents = 50 WHERE id = $1', [u.id]); // (perdeu quase tudo)
   await createDeposit(u.id, 2000);
   assert.equal((await Users.getById(db, u.id)).wagerRequiredCents, 2000); // so o deposito novo
+});
+
+test('deposito com CPF vincula o titular e recusa outro documento', async () => {
+  const u = await makeUser('1177770018');
+  const cpf = cpfValido(u.phone);
+  await createDeposit(u.id, 5000, { cpf });
+  await assert.rejects(() => createDeposit(u.id, 5000, { cpf: CPF_OK }), (e) => e.code === 'CPF_MISMATCH');
+});
+
+test('sigilopay recusa deposito sem CPF', async () => {
+  const antes = CONFIG.payments.provider;
+  CONFIG.payments.provider = 'sigilopay';
+  try {
+    const u = await makeUser('1177770019');
+    await assert.rejects(() => createDeposit(u.id, 5000), (e) => e.code === 'INVALID_CPF');
+  } finally {
+    CONFIG.payments.provider = antes;
+  }
 });

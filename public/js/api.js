@@ -145,8 +145,8 @@ export const Api = {
     const j = await call('wallet/deposit-info');
     return { depositoMinimoCents: j.minCents, depositoMaximoCents: j.maxCents, provider: j.provider, chips: j.chipsCents, rotulos: j.rotulos || {}, cores: j.cores || {}, bonus: j.bonus || null };
   },
-  async deposit(amountCents) {
-    const j = await post('wallet/deposit', { amountCents });
+  async deposit(amountCents, cpf) {
+    const j = await post('wallet/deposit', { amountCents, cpf });
     const c = j.charge || {};
     if (c.status === 'paid') return { id: c.id, paid: true, balanceCents: j.balanceCents }; // confirmado na hora (mock)
     return {

@@ -243,16 +243,13 @@ export const Withdrawals = {
   async getByRef(q, ref) {
     return mapWithdrawal((await q.query('SELECT * FROM withdrawals WHERE provider_ref = $1', [ref]))[0]) || null;
   },
-  /** Atualiza status; ao finalizar (paid/failed/rejected) apaga chave e CPF (LGPD).
+  /** Atualiza status. Chave, CPF e IP ficam gravados para o pagamento manual.
    *  from: so muda se o status atual for um destes (devolve null se nao mudou). */
   async finish(q, id, { status, providerRef = null, from = null, webhookToken = null }) {
     return mapWithdrawal((await q.query(
       `UPDATE withdrawals
          SET status = $2, provider_ref = COALESCE($3, provider_ref), updated_at = now(),
-             webhook_token = COALESCE($5, webhook_token),
-             pix_key = CASE WHEN $2 IN ('paid','failed','rejected') THEN NULL ELSE pix_key END,
-             client_ip = CASE WHEN $2 IN ('paid','failed','rejected') THEN NULL ELSE client_ip END,
-             cpf_enc = CASE WHEN $2 = 'review' THEN cpf_enc ELSE NULL END
+             webhook_token = COALESCE($5, webhook_token)
        WHERE id = $1 AND ($4::text[] IS NULL OR status = ANY($4::text[])) RETURNING *`,
       [id, status, providerRef, from, webhookToken],
     ))[0]) || null;

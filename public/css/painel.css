@@ -96,6 +96,16 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .ledger li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .ledger li small { color: var(--mut); }
 .ledger li > small:last-child { grid-column: 1 / -1; font-size: .75rem; }
+#wq li.payout { display: block; padding: 14px 0 16px; }
+.payout-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.payout-head b { font-size: 1.45rem; color: var(--acc); letter-spacing: -.02em; }
+.payout-head small { color: var(--mut); }
+.pay-row { display: grid; grid-template-columns: 88px 1fr auto; gap: 8px; align-items: center; margin-top: 8px; }
+.pay-row span { color: var(--mut); font-size: .75rem; }
+.pay-row code { font-family: ui-monospace, monospace; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; word-break: break-all; }
+.pay-row button.copy { padding: 8px 10px; font-size: .75rem; }
+.payout .meta { color: var(--mut); font-size: .75rem; margin: 10px 0 0; }
+.payout .row { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pos { color: var(--ok); font-weight: 800; } .neg { color: var(--bad); font-weight: 800; }
 
 /* jogo justo */

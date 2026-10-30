@@ -5,12 +5,9 @@
 // webhook e e idempotente (o PSP pode reenviar o mesmo evento). Devolucao do
 // PIX (MED/chargeback) debita o que der, estorna comissoes e bloqueia a conta.
 //
-// SAQUE: valida -> debita e registra o pedido na mesma transacao. Acima de
-// CONFIG.limits.withdrawAutoMaxCents o pedido fica em 'review' ate o admin
-// aprovar (ou recusar, com estorno). Aprovado, pede a transferencia ao PSP
-// (FORA da transacao: chamada externa lenta nao segura trava no banco).
-// Estorno SO com recusa definitiva do PSP: timeout/erro de rede fica em
-// 'processing' ate o webhook (ou a conciliacao) dizer se o PIX saiu.
+// SAQUE: valida -> debita e registra o pedido na mesma transacao, sempre em
+// 'review'. A API de transferencia da SigiloPay nao e chamada. O admin ve os
+// dados, paga o PIX na mao e marca como pago (ou recusa, com estorno).
 //
 // Regras: um saque em andamento por vez; CPF do titular vinculado a conta
 // (hash, unico entre contas); rollover do deposito antes de sacar; toda
@@ -34,25 +31,41 @@ const reais = (c) => (c / 100).toFixed(2).replace('.', ',');
 
 // ---------- Deposito ----------
 
-export async function createDeposit(userId, amountCents) {
+export async function createDeposit(userId, amountCents, { cpf } = {}) {
   const lim = await getSetting('limites');
   assertCentsInRange(amountCents, lim.depositMinCents, lim.depositMaxCents, 'deposito');
+  // SigiloPay exige o CPF na cobranca. No mock ele e opcional, mas se vier
+  // vincula o titular do mesmo jeito que o saque.
+  const doc = (CONFIG.payments.provider === 'sigilopay' || String(cpf ?? '').trim()) ? assertCpf(cpf) : null;
 
   const provider = getProvider();
   const expiresAt = Date.now() + CONFIG.payments.chargeTtlMs;
   // trava o jogador: o limite de deposito conta as cobrancas pendentes
-  const created = await withUserLock(userId, async (t, user) => {
-    assertNotBlocked(user);
-    await assertCanDeposit(t, user, amountCents);
-    return Charges.create(t, { userId, amountCents, provider: CONFIG.payments.provider, expiresAt });
-  });
+  let created;
+  try {
+    created = await withUserLock(userId, async (t, user) => {
+      assertNotBlocked(user);
+      await assertCanDeposit(t, user, amountCents);
+      if (doc) {
+        const h = cpfHash(doc);
+        if (user.cpfHash && user.cpfHash !== h) {
+          throw domainError('CPF_MISMATCH', 'O CPF precisa ser o mesmo ja vinculado a esta conta.');
+        }
+        if (!user.cpfHash) await Users.setCpfHash(t, userId, h);
+      }
+      return Charges.create(t, { userId, amountCents, provider: CONFIG.payments.provider, expiresAt });
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, 'users_cpf_hash_uniq')) throw domainError('CPF_IN_USE', 'Este CPF ja esta vinculado a outra conta.', 409);
+    throw err;
+  }
 
   const payer = await Users.getById(db, userId);
   let pix;
   try {
     pix = await provider.createPixCharge({
       chargeId: created.id, amountCents, expiresAt,
-      payer: payer ? { name: payer.name, phone: payer.phone } : null,
+      payer: payer ? { name: payer.name, phone: payer.phone, document: doc } : null,
     });
   } catch (err) {
     // cobranca sem PIX nao pode continuar contando no limite de deposito
@@ -163,12 +176,11 @@ export function viewCharge(c) {
 /** source: 'balance' (saldo de jogo) ou 'affiliate' (saldo de comissao). */
 export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, source = 'balance', clientIp = null }) {
   const key = normalizePixKey(pixKey);
-  const doc = assertCpf(cpf); // nunca em claro no banco (LGPD): so cifrado enquanto espera aprovacao
+  const doc = assertCpf(cpf); // cifrado no banco; o painel mostra em claro so para o admin pagar na mao
   const fromAff = source === 'affiliate';
   const lim = await getSetting('limites');
   if (!fromAff) assertCentsInRange(amountCents, lim.withdrawMinCents, lim.withdrawMaxCents, 'saque');
   else if (!Number.isInteger(amountCents) || amountCents <= 0) throw domainError('INVALID_AMOUNT', 'Valor invalido');
-  const review = amountCents > lim.withdrawAutoMaxCents;
 
   let result;
   try {
@@ -186,8 +198,8 @@ export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, sour
       }
       if (!user.cpfHash) await Users.setCpfHash(t, userId, h); // UNIQUE: o CPF nao pode estar em outra conta
       const w = await Withdrawals.create(t, {
-        userId, amountCents, pixKey: key, pixKeyMask: maskPixKey(key), provider: CONFIG.payments.provider,
-        status: review ? 'review' : 'processing', cpfEnc: review ? seal(doc) : null, source: fromAff ? 'affiliate' : 'balance',
+        userId, amountCents, pixKey: key, pixKeyMask: maskPixKey(key), provider: 'manual',
+        status: 'review', cpfEnc: seal(doc), source: fromAff ? 'affiliate' : 'balance',
         clientIp,
       });
       const meta = { withdrawalId: w.id, pixKeyMask: w.pixKeyMask };
@@ -204,11 +216,9 @@ export async function requestWithdrawal(userId, { amountCents, pixKey, cpf, sour
     throw err;
   }
 
-  const { withdrawal, balanceCents, ownerName } = result;
+  const { withdrawal, balanceCents } = result;
   const extra = fromAff ? { affiliateBalanceCents: (await Affiliates.balanceOf(db, userId)) } : {};
-  if (review) return { withdrawal: viewWithdrawal(withdrawal), balanceCents, ...extra };
-  const done = await sendToPsp(withdrawal, key, doc, { ownerName, clientIp });
-  return { withdrawal: viewWithdrawal(done), balanceCents, ...extra };
+  return { withdrawal: viewWithdrawal(withdrawal), balanceCents, ...extra };
 }
 
 /** Devolve o valor de um saque que nao saiu, para o saldo de onde veio (na transacao `t`). */
@@ -227,35 +237,7 @@ async function failAndRefund(w, nextStatus, from, meta) {
   });
 }
 
-/**
- * Pede a transferencia ao PSP. Recusa definitiva (err.definitive) estorna; erro
- * ambiguo (timeout/rede) NAO estorna: o PIX pode ter saido. Fica 'processing'.
- */
-async function sendToPsp(withdrawal, pixKey, cpf, owner = {}) {
-  let result;
-  try {
-    result = await getProvider().sendPixTransfer({
-      withdrawalId: withdrawal.id, amountCents: withdrawal.amountCents, pixKey, cpf,
-      ownerName: owner.ownerName, clientIp: owner.clientIp,
-    });
-  } catch (err) {
-    if (err && err.definitive) {
-      const bal = await failAndRefund(withdrawal, 'failed', ['processing'], { withdrawalId: withdrawal.id });
-      await audit(null, { userId: withdrawal.userId, action: 'withdraw_failed', meta: { withdrawalId: withdrawal.id, motivo: String(err.message || '').slice(0, 120) } });
-      throw Object.assign(domainError('WITHDRAW_FAILED', 'Saque nao processado. Valor devolvido ao saldo.', 502), { balanceCents: bal });
-    }
-    log('error', 'psp_transfer_ambiguous', { withdrawalId: withdrawal.id, err: String(err?.message || err) });
-    await audit(null, { userId: withdrawal.userId, action: 'withdraw_unknown', meta: { withdrawalId: withdrawal.id } });
-    return { ...withdrawal, status: 'processing' };
-  }
-  const done = await tx((t) => Withdrawals.finish(t, withdrawal.id, {
-    status: result.status, providerRef: result.providerRef, webhookToken: result.webhookToken || null, from: ['processing'],
-  }));
-  if (done && done.status === 'paid') await audit(null, { userId: withdrawal.userId, action: 'withdraw_paid', meta: { withdrawalId: withdrawal.id, amountCents: withdrawal.amountCents } });
-  return done || (await Withdrawals.get(db, withdrawal.id));
-}
-
-/** Webhook do PSP sobre a transferencia: 'paid' conclui, 'failed' estorna (uma vez so). */
+/** Webhook antigo de transferencia: 'paid' conclui, 'failed' estorna (uma vez so). */
 export async function confirmTransfer({ withdrawalId, providerRef, status }) {
   const w = isUuid(withdrawalId) ? await Withdrawals.get(db, withdrawalId) : (providerRef ? await Withdrawals.getByRef(db, String(providerRef)) : null);
   if (!w) return { ignored: true };
@@ -272,13 +254,11 @@ export async function confirmTransfer({ withdrawalId, providerRef, status }) {
   return { ignored: true };
 }
 
-/** Admin aprova um saque em 'review': envia ao PSP. */
+/** Admin confirma que ja enviou o PIX na mao. Nao chama a API de saque. */
 export async function approveWithdrawal(admin, withdrawalId, ip) {
-  const w = await claimForReview(admin, withdrawalId, 'processing');
-  await audit(null, { userId: w.userId, actorId: admin.id, action: 'withdraw_approved', meta: { withdrawalId: w.id, amountCents: w.amountCents }, ip });
-  const owner = await Users.getById(db, w.userId);
-  const done = await sendToPsp(w, w.pixKey, open(w.cpfEnc), { ownerName: owner?.name, clientIp: w.clientIp });
-  return { withdrawal: viewWithdrawal(done) };
+  const w = await claimForReview(admin, withdrawalId, 'paid');
+  await audit(null, { userId: w.userId, actorId: admin.id, action: 'withdraw_paid', meta: { withdrawalId: w.id, amountCents: w.amountCents, manual: true }, ip });
+  return { withdrawal: viewWithdrawal({ ...w, status: 'paid' }) };
 }
 
 /** Admin recusa um saque em 'review': marca e estorna NA MESMA transacao. */
@@ -298,10 +278,9 @@ export async function rejectWithdrawal(admin, withdrawalId, { note } = {}, ip) {
   return { withdrawal: viewWithdrawal({ ...found, status: 'rejected', reviewNote: why }), balanceCents };
 }
 
-async function findForReview(admin, withdrawalId) {
+async function findForReview(_admin, withdrawalId) {
   const found = isUuid(withdrawalId) ? await Withdrawals.get(db, withdrawalId) : null;
   if (!found) throw domainError('NOT_FOUND', 'Saque inexistente', 404);
-  if (admin.id && found.userId === admin.id) throw domainError('SELF_ACTION', 'Admin nao analisa o proprio saque: peca a outro admin', 403);
   return found;
 }
 
@@ -318,13 +297,16 @@ async function claimForReview(admin, withdrawalId, nextStatus, note = null) {
   });
 }
 
-/** Fila do admin (telefone mascarado). */
+/** Fila do admin, com os dados completos para pagar o PIX na mao. */
 export async function reviewQueue() {
   const rows = await Withdrawals.reviewQueue(db);
   return rows.map((w) => ({
     ...viewWithdrawal(w), userId: w.userId, userName: w.userName,
-    userPhone: w.userPhone ? `${w.userPhone.slice(0, 4)}*****${w.userPhone.slice(-2)}` : '',
+    userPhone: w.userPhone || '',
     userBalanceCents: w.userBalanceCents, userSince: w.userSince,
+    pixKey: w.pixKey || '',
+    cpf: w.cpfEnc ? open(w.cpfEnc) : '',
+    clientIp: w.clientIp || '',
   }));
 }
 

@@ -53,7 +53,7 @@ async function boot() {
     <section class="card"><h2>Numeros</h2><p class="hint">Só dados reais: sem as contas de demonstração e sem as rodadas do modo teste.</p><div id="stats" class="grid"></div>
       <button id="btnExpire" class="link">encerrar rounds abandonados agora</button></section>
     <section class="card"><h2>Saques para aprovar <small id="wqN"></small></h2>
-      <p class="hint">O valor ja saiu do saldo do jogador. Aprovar envia o PIX; recusar devolve o valor ao saldo.</p>
+      <p class="hint">O valor já saiu do saldo. Copie os dados, envie o PIX você mesmo e então marque como pago. Recusar devolve o valor. Nenhuma API de saque é chamada.</p>
       <ul id="wq" class="ledger"></ul><p id="wqMsg" class="msg"></p></section>
     <section class="card"><h2>Jogo</h2>
       <p class="hint">O primeiro bloco é o jogo normal. O bloco “rodadas fáceis” vale nas primeiras da conta e nas primeiras de cada dia. Cada rodada guarda o RTP com que foi sorteada.</p>
@@ -111,7 +111,7 @@ const JOGO = [
 const LIMITES = [
   ['depositMinCents', 'Depósito mínimo R$', 'reais'], ['depositMaxCents', 'Depósito máximo R$', 'reais'],
   ['withdrawMinCents', 'Saque mínimo R$', 'reais'], ['withdrawMaxCents', 'Saque máximo R$', 'reais'],
-  ['withdrawAutoMaxCents', 'Saque automático até R$ (0 = todos passam por aprovação)', 'reais'],
+  ['withdrawAutoMaxCents', 'Saque automático até R$ (ignorado: todo saque fica na fila para pagamento manual)', 'reais'],
   ['rolloverPct', 'Rollover: % do depósito a apostar antes de sacar (0 desliga)', 'pctx'],
 ];
 const BONUS = [
@@ -228,25 +228,57 @@ async function suspects() {
   $('#sus').onclick = (e) => { const li = e.target.closest('li[data-id]'); if (li) detail(li.dataset.id); };
 }
 
+function reaisSolto(cents) { return (Number(cents) / 100).toFixed(2).replace('.', ','); }
+function cpfBonito(d) {
+  const x = String(d || '').replace(/\D/g, '');
+  return x.length === 11 ? x.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : (d || '');
+}
+function tipoChave(key) {
+  const k = String(key || '');
+  if (k.includes('@')) return 'E-mail';
+  if (/^[0-9a-f-]{36}$/i.test(k)) return 'Aleatória';
+  const digitos = k.replace(/\D/g, '');
+  if (k.startsWith('+') || digitos.startsWith('55')) return 'Telefone';
+  if (digitos.length === 14) return 'CNPJ';
+  if (digitos.length === 11) return 'CPF';
+  return 'Chave';
+}
+const campoPagamento = (rotulo, valor) => `<div class="pay-row"><span>${esc(rotulo)}</span><code>${esc(valor)}</code><button type="button" class="copy" data-copy="${esc(valor)}">Copiar</button></div>`;
+
 async function withdrawals() {
   const { withdrawals: list } = await api('withdrawals');
   $('#wqN').textContent = list.length ? `(${list.length})` : '';
-  $('#wq').innerHTML = list.map((w) => `<li data-id="${esc(w.id)}">
-      <span>${brl(w.amountCents)} · <b>${esc(w.userName)}</b> <small>${esc(w.userPhone)} · chave ${esc(w.pixKeyMask)} · saldo ${brl(w.userBalanceCents)} · conta desde ${new Date(w.userSince).toLocaleDateString('pt-BR')}</small></span>
-      <small>${dt(w.createdAt)}</small>
-      <span class="row"><button class="cash" data-a="approve">Aprovar</button><button data-a="reject">Recusar</button><button class="link" data-a="user">ver jogador</button></span>
-    </li>`).join('') || '<li class="hint">Nenhum saque esperando.</li>';
+  $('#wq').innerHTML = list.map((w) => {
+    const ip = w.clientIp && w.clientIp !== '::1' && w.clientIp !== '127.0.0.1' ? w.clientIp : '';
+    return `<li class="payout" data-id="${esc(w.id)}">
+      <div class="payout-head"><b>${brl(w.amountCents)}</b><small>${esc(w.userName)} · ${w.source === 'affiliate' ? 'comissão' : 'saldo do jogo'}</small></div>
+      ${campoPagamento('Valor', reaisSolto(w.amountCents))}
+      ${campoPagamento('Nome', w.userName || '')}
+      ${campoPagamento(tipoChave(w.pixKey), w.pixKey || '')}
+      ${campoPagamento('CPF', cpfBonito(w.cpf))}
+      ${campoPagamento('Telefone', w.userPhone || '')}
+      <p class="meta">Pedido em ${dt(w.createdAt)} · conta desde ${new Date(w.userSince).toLocaleDateString('pt-BR')} · saldo restante ${brl(w.userBalanceCents)}${ip ? ` · IP ${esc(ip)}` : ''}</p>
+      <span class="row"><button class="cash" data-a="approve">Marcar como pago</button><button data-a="reject">Recusar</button><button class="link" data-a="user">ver jogador</button></span>
+    </li>`;
+  }).join('') || '<li class="hint">Nenhum saque esperando.</li>';
   $('#wq').onclick = async (e) => {
+    const copiar = e.target.closest('button[data-copy]');
+    if (copiar) {
+      const texto = copiar.getAttribute('data-copy') || '';
+      try { await navigator.clipboard.writeText(texto); copiar.textContent = 'Copiado'; setTimeout(() => { copiar.textContent = 'Copiar'; }, 1200); }
+      catch { copiar.textContent = 'Selecione'; }
+      return;
+    }
     const b = e.target.closest('button[data-a]'); if (!b) return;
     const li = b.closest('li[data-id]'), id = li.dataset.id;
     if (b.dataset.a === 'user') return detail(list.find((w) => w.id === id).userId);
     const body = b.dataset.a === 'reject' ? { note: prompt('Motivo da recusa (o jogador vê no extrato):') } : {};
     if (b.dataset.a === 'reject' && !body.note) return;
-    if (b.dataset.a === 'approve' && !confirm('Aprovar e enviar o PIX?')) return;
+    if (b.dataset.a === 'approve' && !confirm('Marcar como pago? O PIX não é enviado daqui. Confirme só depois de ter pago na mão.')) return;
     li.querySelectorAll('button').forEach((x) => { x.disabled = true; });
     try {
       await api(`withdrawals/${encodeURIComponent(id)}/${b.dataset.a}`, body);
-      $('#wqMsg').textContent = b.dataset.a === 'approve' ? 'Saque aprovado.' : 'Saque recusado e estornado.';
+      $('#wqMsg').textContent = b.dataset.a === 'approve' ? 'Marcado como pago.' : 'Saque recusado e estornado.';
     } catch (err) { $('#wqMsg').textContent = err.message; }
     withdrawals(); stats(); audit();
   };

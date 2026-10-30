@@ -1493,11 +1493,13 @@ async function loadExtrato() {
 $('#wDepBtn').onclick = async () => {
   const btn = $('#wDepBtn'), err = $('#wDepErr');
   const cents = centsFromStr($('#wDepVal').value);
+  const cpf = $('#wDepCpf').value.replace(/\D/g, '');
   err.hidden = true;
   if (!cents) { err.textContent = 'Digite um valor válido.'; err.hidden = false; Sound.deny(); return; }
+  if (cpf.length !== 11) { err.textContent = 'CPF inválido (11 dígitos).'; err.hidden = false; Sound.deny(); return; }
   btn.disabled = true; btn.classList.add('loading');
   try {
-    const j = await Api.deposit(cents);
+    const j = await Api.deposit(cents, cpf);
     pixelEv('iniciou_deposito', { reais: cents / 100 });
     pendingDep = { id: j.id, cents };
     if (j.pixCode) {
@@ -1586,7 +1588,7 @@ $('#wSaqBtn').onclick = async () => {
     if (j && typeof j.balanceCents === 'number') { acct.balance = j.balanceCents; updBalance(); }
     $('#wSaqVal').value = '';
     const st = r && r.withdrawal && r.withdrawal.status;
-    toast(st === 'paid' ? '✅ Saque enviado pro seu PIX!' : st === 'review' ? '⏳ Saque solicitado! Ele passa por uma análise rápida — acompanhe pelo extrato.' : '✅ Saque solicitado! Acompanhe pelo extrato.', 'green'); Sound.cheer(1);
+    toast(st === 'paid' ? '✅ Saque registrado.' : '⏳ Saque solicitado. O PIX é enviado manualmente — acompanhe pelo extrato.', 'green'); Sound.cheer(1);
     walletTab('ext');
   } catch (e) { err.textContent = e.message; err.hidden = false; Sound.deny(); }
   finally { btn.disabled = false; btn.classList.remove('loading'); }

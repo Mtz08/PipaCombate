@@ -5,6 +5,13 @@ import { Charges, Withdrawals } from '../db/repos.js';
 import { makeUser } from '../db/testing.js';
 import { CONFIG } from '../config.js';
 import { createPixCharge, sendPixTransfer, parseWebhook, nomeTitular, pixTipo } from './sigilopay.js';
+import { firstPublicIpv4 } from '../util/validate.js';
+
+test('saque usa o IPv4 publico e ignora IPv6 e rede interna', () => {
+  assert.equal(firstPublicIpv4(['2804:14d::1', '10.0.0.8', '177.10.20.30']), '177.10.20.30');
+  assert.equal(firstPublicIpv4('::ffff:8.8.8.8'), '8.8.8.8');
+  assert.equal(firstPublicIpv4('2804:14d::1'), null);
+});
 
 test('nome do titular perde acento e a chave ganha o tipo certo', () => {
   assert.equal(nomeTitular('José da Silva!'), 'Jose da Silva');
@@ -26,6 +33,7 @@ test('cobranca chama receber pix, devolve o copia-e-cola e o QR', async () => {
     assert.equal(body.amount, 50);
     assert.equal(body.callbackUrl, 'https://pipacombate.test/api/webhooks/payments');
     assert.equal(body.client.email, '28999119982@cliente.pipacombate.online');
+    assert.equal(body.client.document, '52998224725');
     assert.equal(opts.headers['x-secret-key'], 'sec');
     return new Response(JSON.stringify({
       transactionId: 'tx1', status: 'OK', webhookToken: 'tok-cobranca',
@@ -35,7 +43,7 @@ test('cobranca chama receber pix, devolve o copia-e-cola e o QR', async () => {
   try {
     const pix = await createPixCharge({
       chargeId: '11111111-1111-4111-8111-111111111111', amountCents: 5000, expiresAt: Date.now(),
-      payer: { name: 'José', phone: '28999119982' },
+      payer: { name: 'José', phone: '28999119982', document: '529.982.247-25' },
     });
     assert.equal(pix.providerRef, 'tx1');
     assert.equal(pix.copyPaste, '00020126PIX');

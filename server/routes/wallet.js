@@ -9,10 +9,17 @@ import { getSetting } from '../domain/settings.js';
 import * as Responsible from '../domain/responsible.js';
 import { assertPasswordOf } from '../domain/accounts.js';
 import { audit, ipOf } from '../domain/audit.js';
+import { firstPublicIpv4 } from '../util/validate.js';
 import { db } from '../db/index.js';
 import { Users } from '../db/repos.js';
 
 const balanceOf = async (userId) => (await Users.getById(db, userId)).balanceCents;
+
+// A SigiloPay recusa saque sem o IPv4 de quem pediu. req.ip pode ser IPv6;
+// o IPv4 as vezes esta em outro salto do proxy.
+function withdrawIp(req) {
+  return firstPublicIpv4(req.ips, req.ip, req.get('x-real-ip'), req.get('x-forwarded-for'), req.socket?.remoteAddress) || req.ip || null;
+}
 
 export const walletRouter = Router();
 walletRouter.use(requireAuth);
@@ -31,7 +38,7 @@ walletRouter.get('/deposit-info', wrap(async (req, res) => {
 
 // Cria a cobranca PIX. O saldo so sobe quando o PSP confirma (webhook).
 walletRouter.post('/deposit', wrap(async (req, res) => {
-  const charge = await createDeposit(req.user.id, Number(req.body?.amountCents));
+  const charge = await createDeposit(req.user.id, Number(req.body?.amountCents), { cpf: req.body?.cpf });
   await audit(null, { userId: req.user.id, action: 'deposit_created', meta: { chargeId: charge.id, amountCents: charge.amountCents, status: charge.status }, ip: ipOf(req) });
   res.status(201).json({ charge, balanceCents: await balanceOf(req.user.id) });
 }));
@@ -66,7 +73,7 @@ walletRouter.post('/responsavel/pausa', wrap(async (req, res) => {
 walletRouter.post('/withdraw-affiliate', wrap(async (req, res) => {
   const { amountCents, pixKey, cpf, password } = req.body ?? {};
   await assertPasswordOf(req.user, password); // sessao roubada nao saca sem a senha
-  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, source: 'affiliate', clientIp: ipOf(req) });
+  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, source: 'affiliate', clientIp: withdrawIp(req) });
   await audit(null, { userId: req.user.id, action: 'withdraw_affiliate', meta: { withdrawalId: r.withdrawal.id, amountCents: r.withdrawal.amountCents, pixKeyMask: r.withdrawal.pixKeyMask }, ip: ipOf(req) });
   res.status(201).json(r);
 }));
@@ -74,7 +81,7 @@ walletRouter.post('/withdraw-affiliate', wrap(async (req, res) => {
 walletRouter.post('/withdraw', wrap(async (req, res) => {
   const { amountCents, pixKey, cpf, password } = req.body ?? {};
   await assertPasswordOf(req.user, password); // sessao roubada nao saca sem a senha
-  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, clientIp: ipOf(req) }).catch(async (err) => {
+  const r = await requestWithdrawal(req.user.id, { amountCents: Number(amountCents), pixKey, cpf, clientIp: withdrawIp(req) }).catch(async (err) => {
     if (err.code === 'WITHDRAW_FAILED') await audit(null, { userId: req.user.id, action: 'withdraw_failed', meta: { amountCents: Number(amountCents) }, ip: ipOf(req) });
     throw err;
   });

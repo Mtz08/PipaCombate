@@ -46,6 +46,27 @@ export function normalizePixKey(raw) {
   throw domainError('INVALID_PIX_KEY', 'Chave PIX invalida');
 }
 
+/**
+ * Primeiro IPv4 publico numa lista (X-Forwarded-For, req.ips, req.ip).
+ * Ignora loopback e rede privada. IPv6 sozinho devolve null: a SigiloPay
+ * exige IPv4 no saque e nao ha como inventar o endereco do jogador.
+ */
+export function firstPublicIpv4(...chunks) {
+  const parts = chunks.flat().filter((v) => v != null && v !== '').join(',').split(/[,\s]+/);
+  for (const part of parts) {
+    const s = String(part).trim().replace(/^::ffff:/i, '').replace(/^\[|\]$/g, '');
+    if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(s)) continue;
+    const n = s.split('.').map(Number);
+    if (n.some((x) => x > 255)) continue;
+    if (n[0] === 10 || n[0] === 127 || n[0] === 0) continue;
+    if (n[0] === 192 && n[1] === 168) continue;
+    if (n[0] === 172 && n[1] >= 16 && n[1] <= 31) continue;
+    if (n[0] === 169 && n[1] === 254) continue;
+    return n.join('.');
+  }
+  return null;
+}
+
 /** Mascara a chave PIX para extrato/log (LGPD): mostra so inicio e fim. */
 export function maskPixKey(k) {
   if (k.length <= 4) return '***';

@@ -121,6 +121,8 @@ export async function createPixCharge({ chargeId, amountCents, expiresAt, payer 
       name: nomeTitular(payer?.name),
       email: emailDoJogador(payer?.phone),
       phone: String(payer?.phone || '').replace(/\D/g, ''),
+      // O adquirente desta conta recusa a cobranca sem o CPF do pagador.
+      ...(payer?.document ? { document: String(payer.document).replace(/\D/g, '') } : {}),
     },
     callbackUrl: callbackUrl(),
   });
