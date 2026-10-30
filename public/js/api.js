@@ -173,8 +173,12 @@ export const Api = {
     return {
       ativo: j.ativo, modelo: j.modelo, codigo: j.codigo,
       link: location.origin + '/cadastro?ref=' + j.codigo,
-      // rótulo de cada nível: "10%" (depósito/revshare) ou "R$ 15" (CPA)
+      niveis: j.niveis || [],
       niveisLabel: (j.niveis || []).map((x) => (x.tipo === 'valor' ? reais(x.cents) : x.pct + '%')),
+      cpaMetas: j.cpaMetas || [0, 5, 10],
+      qualificados: j.qualificados || 0,
+      pctAtual: j.pctAtual,
+      faixaAtual: j.faixaAtual || 0,
       cpaDepositoMinCents: j.cpaDepositoMinCents,
       n1Count: n.n1, n2Count: n.n2, n3Count: n.n3,
       totalCommissionCents: j.ganhoCents, affiliateBalanceCents: j.saldoCents,

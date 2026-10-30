@@ -34,10 +34,11 @@ export const SCHEMAS = {
   afiliados: {
     padrao: () => ({
       ativo: true,
-      modelo: 'deposito',             // 'cpa' | 'deposito' | 'revshare'
-      niveisPct: [10, 5, 3],           // % por nivel (deposito e revshare)
-      cpaCents: [1000, 0, 0],          // valor fixo por nivel (cpa), pago no 1o deposito
-      cpaDepositoMinCents: 2500,       // deposito minimo para liberar o CPA
+      modelo: 'cpa',                   // 'cpa' | 'deposito' | 'revshare'
+      niveisPct: [10, 15, 20],         // CPA: % de cada faixa. Nos outros modelos, % por nivel da cadeia.
+      cpaMetas: [0, 5, 10],            // CPA: amigos com deposito minimo para liberar cada %
+      cpaCents: [0, 0, 0],             // legado: o CPA atual usa niveisPct, nao valor fixo
+      cpaDepositoMinCents: 2500,       // deposito minimo para o CPA (R$ 25)
       saqueMinCents: 3000,
       saqueMaxCents: 500000,
     }),
@@ -52,13 +53,15 @@ export const SCHEMAS = {
         ativo: v.ativo !== false,
         modelo,
         niveisPct: tres(v.niveisPct, 50, 'percentual'),
+        cpaMetas: tres(v.cpaMetas, 100000, 'meta de indicados'),
         cpaCents: tres(v.cpaCents, 100000, 'CPA'),
         cpaDepositoMinCents: int(v.cpaDepositoMinCents, 0, 1000000, 'deposito minimo do CPA'),
         saqueMinCents: int(v.saqueMinCents, 100, 10000000, 'saque minimo'),
         saqueMaxCents: int(v.saqueMaxCents, 100, 10000000, 'saque maximo'),
       };
       if (out.saqueMaxCents < out.saqueMinCents) throw bad('saque maximo menor que o minimo');
-      if (out.niveisPct.reduce((a, b) => a + b, 0) > 60) throw bad('soma dos percentuais acima de 60%');
+      if (out.cpaMetas[1] < out.cpaMetas[0] || out.cpaMetas[2] < out.cpaMetas[1]) throw bad('as metas de indicados precisam crescer');
+      if (modelo !== 'cpa' && out.niveisPct.reduce((a, b) => a + b, 0) > 60) throw bad('soma dos percentuais acima de 60%');
       return out;
     },
   },

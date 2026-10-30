@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=d21">
+<link rel="stylesheet" href="css/style.css?v=d27">
 <script src="js/pixels.js?v=2" defer></script>
 </head>
 <body>
@@ -74,7 +74,7 @@
     </div>
     <form id="fReg" class="form" novalidate>
       <label><span>Nome</span><input name="name" maxlength="80" autocomplete="name" autocapitalize="words" placeholder="Seu nome"></label>
-      <label><span>Telefone (WhatsApp)</span><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999"></label>
+      <label><span>Telefone (WhatsApp)</span><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" placeholder="(11) 99999-9999"></label>
       <div class="two">
         <label><span>Senha</span><input name="password" type="password" autocomplete="new-password" placeholder="mín. 8"></label>
         <label><span>Confirmar</span><input name="password2" type="password" autocomplete="new-password"></label>
@@ -85,7 +85,7 @@
       <button type="submit" class="btn btn-play"><span>CRIAR CONTA E JOGAR</span></button>
     </form>
     <form id="fLogin" class="form hidden" novalidate>
-      <label><span>Telefone</span><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999"></label>
+      <label><span>Telefone</span><input name="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" placeholder="(11) 99999-9999"></label>
       <label><span>Senha</span><input name="password" type="password" autocomplete="current-password"></label>
       <p class="err" hidden></p>
       <button type="submit" class="btn btn-play"><span>ENTRAR</span></button>
@@ -120,6 +120,14 @@
       <button id="mapTag" class="map-tag"></button>
     </div>
 
+    <section id="winTape" class="win-board" aria-label="Ganhos recentes">
+      <h3 class="sec-h"><i class="kt"></i>Quem ganhou agora</h3>
+      <table>
+        <thead><tr><th>Jogador</th><th>Ganho</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
     <section id="secPagos" class="sec" hidden>
       <h3 class="sec-h"><i class="kt"></i>Últimos saques pagos</h3>
       <ul id="pagosList" class="pagos"></ul>
@@ -128,7 +136,7 @@
 
     <button id="indicaCard" class="indica-card" data-sheet="indicacao">
       <span class="indica-ic">🎁</span>
-      <span class="indica-txt"><b>Indique e Ganhe</b><small>Convide amigos e ganhe % de cada depósito deles</small></span>
+      <span class="indica-txt"><b>Indique e Ganhe</b><small id="indicaCardTxt">10% do primeiro depósito de quem entrar pelo seu link</small></span>
       <span class="indica-go">›</span>
     </button>
 
@@ -209,7 +217,7 @@
     <div id="wDepForm">
       <div id="wDepBonus" class="bonus-banner" hidden></div>
       <label><span>Valor do depósito</span><input id="wDepVal" inputmode="decimal" placeholder="Digite o valor ou escolha abaixo"></label>
-      <label><span>CPF do titular</span><input id="wDepCpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00"></label>
+      <label><span>CPF do titular</span><input id="wDepCpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00"></label>
       <div id="wDepChips" class="chips wrap c"></div>
       <p class="err" id="wDepErr" hidden></p>
       <button id="wDepBtn" class="btn btn-play"><span>GERAR PIX</span></button>
@@ -227,7 +235,7 @@
   <div id="wSaq" class="wtab form hidden">
     <label><span>Valor do saque</span><input id="wSaqVal" inputmode="decimal" placeholder="R$ 50,00"></label>
     <label><span>Chave PIX</span><input id="wSaqPix" autocapitalize="off" spellcheck="false" placeholder="CPF, e-mail, telefone ou aleatória"></label>
-    <label><span>CPF do titular</span><input id="wSaqCpf" inputmode="numeric" placeholder="000.000.000-00"></label>
+    <label><span>CPF do titular</span><input id="wSaqCpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00"></label>
     <label><span>Sua senha (confirmação)</span><input id="wSaqPw" type="password" autocomplete="current-password"></label>
     <p id="wSaqRoll" class="note c" hidden></p>
     <p class="err" id="wSaqErr" hidden></p>
@@ -247,14 +255,20 @@
   <header class="sheet-h"><div class="ribbon">INDIQUE E GANHE</div><button class="round-btn red close" aria-label="Fechar">✕</button></header>
   <div class="sheet-b">
     <a class="admin-link hidden js-admin" href="/admin.html#afiliados">⚙️ Configurar o programa de afiliados (admin)</a>
-    <p id="indTxt" class="note c">Compartilhe seu link. Quando um amigo se cadastrar e depositar, você ganha comissão — <b>em até 3 níveis</b>.</p>
-    <div class="ind-levels">
+    <p id="indTxt" class="note c">Cada amigo que entrar pelo seu link vale uma comissão no <b>primeiro depósito</b> de pelo menos <b>R$ 25,00</b>.</p>
+    <p id="indFaixa" class="note c">Agora você ganha <b>10%</b>. Faltam <b>5</b> amigos com depósito de <b>R$ 25,00</b> para 15%.</p>
+    <div id="indRegras" class="ind-levels">
+      <div class="ind-lv on" data-faixa="0"><b id="indF0">10%</b><small id="indF0s">desde o início</small></div>
+      <div class="ind-lv" data-faixa="1"><b id="indF1">15%</b><small id="indF1s">5 amigos depositaram</small></div>
+      <div class="ind-lv" data-faixa="2"><b id="indF2">20%</b><small id="indF2s">10 amigos depositaram</small></div>
+    </div>
+    <div id="indNiveis" class="ind-levels" hidden>
       <div class="ind-lv"><b id="indN1">—</b><small>Nível 1<br>direto</small></div>
       <div class="ind-lv"><b id="indN2">—</b><small>Nível 2</small></div>
       <div class="ind-lv"><b id="indN3">—</b><small>Nível 3</small></div>
     </div>
 
-    <label class="ind-lbl">Seu link de indicação</label>
+    <label class="ind-lbl">Seu link de convite</label>
     <div class="pix-copy"><input id="indLink" readonly value=""><button id="indCopy" class="btn btn-2 small">Copiar</button></div>
     <button id="indShare" class="btn btn-play"><span>📲 COMPARTILHAR</span></button>
     <p class="note c">Seu código: <b id="indCode">—</b></p>
@@ -269,7 +283,7 @@
       <label class="ind-lbl">Sacar comissão (PIX)</label>
       <input id="indSaqVal" inputmode="decimal" placeholder="Valor R$">
       <input id="indSaqPix" autocapitalize="off" spellcheck="false" placeholder="Chave PIX">
-      <input id="indSaqCpf" inputmode="numeric" placeholder="CPF do titular">
+      <input id="indSaqCpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00">
       <input id="indSaqPw" type="password" autocomplete="current-password" placeholder="Sua senha (confirmação)">
       <p class="err" id="indSaqErr" hidden></p>
       <button id="indSaqBtn" class="btn btn-green"><span>SACAR COMISSÃO</span></button>
@@ -360,6 +374,6 @@
 <div id="modal" class="modal hidden"><div id="modalCard" class="modal-card"></div></div>
 </div>
 
-<script type="module" src="js/main.js?v=d21"></script>
+<script type="module" src="js/main.js?v=d28"></script>
 </body>
 </html>

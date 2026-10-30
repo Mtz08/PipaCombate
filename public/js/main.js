@@ -7,7 +7,7 @@ import { money, SKINS, ENEMIES, ENEMY_LOOKS, THIEF_LOOK, CUTTER_LOOK, BOSSES, NO
 import { P, save as savePrefs, rerollKid, skinById, mapById } from './store.js?v=d21';
 import { Sound } from './audio.js?v=d21';
 import * as Art from './art.js?v=d21';
-import { Api, Auth } from './api.js?v=d21';
+import { Api, Auth } from './api.js?v=d23';
 import { windPoint } from './game/fair.js';
 
 /* =========================================================
@@ -21,6 +21,39 @@ const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const soDigitos = s => String(s || '').replace(/\D/g, '');
+function maskPhone(v) {
+  const d = soDigitos(v).slice(0, 11);
+  if (d.length <= 2) return d.length ? '(' + d : '';
+  if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+  if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+  return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+}
+function maskCpf(v) {
+  const d = soDigitos(v).slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return d.slice(0, 3) + '.' + d.slice(3);
+  if (d.length <= 9) return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
+  return d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
+}
+function bindMask(el, fn) {
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const cursor = el.selectionStart || 0;
+    const digitsBefore = soDigitos(el.value.slice(0, cursor)).length;
+    const next = fn(el.value);
+    if (el.value === next) return;
+    el.value = next;
+    let pos = 0, seen = 0;
+    while (pos < next.length && seen < digitsBefore) { if (/\d/.test(next[pos])) seen++; pos++; }
+    el.setSelectionRange(pos, pos);
+  });
+}
+bindMask(document.querySelector('#fReg [name=phone]'), maskPhone);
+bindMask(document.querySelector('#fLogin [name=phone]'), maskPhone);
+bindMask($('#wDepCpf'), maskCpf);
+bindMask($('#wSaqCpf'), maskCpf);
+bindMask($('#indSaqCpf'), maskCpf);
 const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 const KINDS = ['moleque', 'veloz', 'aparador', 'pesadao', 'cortador', 'chefe', 'aparar'];
@@ -1607,11 +1640,35 @@ function renderIndicacao() {
     $('#indCode').textContent = j.codigo || '—';
     const lv = j.niveisLabel || [];
     ['#indN1', '#indN2', '#indN3'].forEach((id, i) => { $(id).textContent = lv[i] || '—'; });
-    const fmtMin = j.cpaDepositoMinCents ? ' de pelo menos R$ ' + money(j.cpaDepositoMinCents) : '';
+    const niveis = j.niveis || [];
+    const metas = j.cpaMetas || [0, 5, 10];
+    const minTxt = 'R$ ' + money(j.cpaDepositoMinCents || 0);
+    const cpa = j.ativo && j.modelo === 'cpa';
+    $('#indRegras').hidden = !cpa;
+    $('#indFaixa').hidden = !cpa;
+    $('#indNiveis').hidden = cpa;
+    if (cpa) {
+      const frases = ['desde o início', metas[1] + ' amigos depositaram', metas[2] + ' amigos depositaram'];
+      [0, 1, 2].forEach((i) => {
+        $('#indF' + i).textContent = (niveis[i]?.pct ?? 0) + '%';
+        $('#indF' + i + 's').textContent = frases[i];
+        document.querySelector('[data-faixa="' + i + '"]').classList.toggle('on', i === (j.faixaAtual || 0));
+      });
+      const atual = j.pctAtual ?? niveis[0]?.pct ?? 0;
+      const prox = (j.faixaAtual || 0) + 1;
+      let faixa = 'Agora você ganha <b>' + atual + '%</b>.';
+      if (prox < 3) {
+        const faltam = Math.max(0, (metas[prox] || 0) - (j.qualificados || 0));
+        faixa += ' Faltam <b>' + faltam + '</b> amigos com depósito de <b>' + minTxt + '</b> para ' + (niveis[prox]?.pct ?? 0) + '%.';
+      }
+      $('#indFaixa').innerHTML = faixa;
+    }
+    const card = $('#indicaCardTxt');
+    if (card) card.textContent = cpa ? '10% a 20% do primeiro depósito de quem entrar pelo seu link' : 'Convide amigos e ganhe comissão';
     $('#indTxt').innerHTML = !j.ativo ? 'O programa de indicação está pausado no momento.'
-      : j.modelo === 'cpa' ? `Compartilhe seu link. Você ganha um valor fixo quando seu indicado faz o <b>primeiro depósito</b>${fmtMin} — <b>em até 3 níveis</b>.`
-      : j.modelo === 'revshare' ? 'Compartilhe seu link. Você ganha uma parte do que a casa fatura com as rodadas dos seus indicados — <b>em até 3 níveis</b>.'
-      : 'Compartilhe seu link. Você ganha uma parte de <b>cada depósito</b> dos seus indicados — <b>em até 3 níveis</b>.';
+      : cpa ? 'Cada amigo que entrar pelo seu link vale uma comissão no <b>primeiro depósito</b> de pelo menos <b>' + minTxt + '</b>. Depósito menor não conta, e os seguintes não geram comissão.'
+      : j.modelo === 'revshare' ? 'Compartilhe seu link. Você ganha uma parte do que a casa fatura com as rodadas dos seus indicados, em até 3 níveis.'
+      : 'Compartilhe seu link. Você ganha uma parte de <b>cada depósito</b> dos seus indicados, em até 3 níveis.';
     $('#indQtd').textContent = (j.n1Count || 0) + (j.n2Count || 0) + (j.n3Count || 0);
     $('#indTotal').textContent = money(j.totalCommissionCents || 0);
     $('#indSaldo').textContent = money(j.affiliateBalanceCents || 0);
@@ -1675,7 +1732,7 @@ $('#fLogin').addEventListener('submit', async e => {
   const f = e.target;
   formErr(f, ''); formBusy(f, true);
   try {
-    const j = await Api.login(f.phone.value.trim(), f.password.value);
+    const j = await Api.login(soDigitos(f.phone.value), f.password.value);
     Auth.set(j.token, j.user); f.reset();
     enterLobby(`Bem-vindo de volta, <b>${esc(j.user.username)}</b>!`);
   } catch (err) { formErr(f, err.message); }
@@ -1686,7 +1743,7 @@ $('#fReg').addEventListener('submit', async e => {
   const f = e.target;
   formErr(f, '');
   const nome = f.name.value.trim();
-  const fone = f.phone.value.replace(/\D/g, '');
+  const fone = soDigitos(f.phone.value);
   if (nome.length < 2) return formErr(f, 'Informe seu nome (mín. 2 letras).');
   if (fone.length < 10 || fone.length > 11) return formErr(f, 'Telefone com DDD, ex.: (11) 99999-9999.');
   if (f.password.value.length < 8) return formErr(f, 'A senha precisa ter pelo menos 8 caracteres.');
@@ -1908,6 +1965,38 @@ function renderPayout() {
   });
   $('#capNote').textContent = `Ganho máximo por rodada: ${c.cap}x a aposta (🪙 ${money(P.stake * c.cap)}).`;
 }
+/* Vitrine de ganhos altos. Nomes inventados; dois deles são apelido. */
+const GANHOS_ALTOS = [
+  { username: 'Lucas M.', map: 'laje', stake: 10000, mult: 12.4 },
+  { username: 'Bruna C.', map: 'campinho', stake: 5000, mult: 18.2 },
+  { username: 'Pedrin7', map: 'morro', stake: 20000, mult: 6.1 },
+  { username: 'Rafael O.', map: 'praia', stake: 8000, mult: 9.7 },
+  { username: 'Camila R.', map: 'noite', stake: 15000, mult: 5.3 },
+  { username: 'Tropa do Lobo', map: 'tempestade', stake: 3000, mult: 24.5 },
+  { username: 'Diego F.', map: 'laje', stake: 12000, mult: 4.8 },
+  { username: 'Larissa R.', map: 'campinho', stake: 6000, mult: 7.9 },
+  { username: 'Thiago A.', map: 'praia', stake: 7000, mult: 8.2 },
+  { username: 'Fernanda L.', map: 'laje', stake: 9000, mult: 6.4 },
+  { username: 'André S.', map: 'morro', stake: 4000, mult: 11.5 },
+  { username: 'Juliana P.', map: 'noite', stake: 11000, mult: 5.6 },
+  { username: 'Gustavo N.', map: 'campinho', stake: 5500, mult: 9.1 },
+  { username: 'Beatriz K.', map: 'tempestade', stake: 13000, mult: 4.4 },
+  { username: 'Henrique V.', map: 'laje', stake: 6500, mult: 7.2 },
+  { username: 'Marina D.', map: 'praia', stake: 8500, mult: 6.8 },
+  { username: 'Paulo R.', map: 'campinho', stake: 7500, mult: 7.5 },
+  { username: 'Aline S.', map: 'morro', stake: 4500, mult: 10.2 },
+  { username: 'Caio M.', map: 'laje', stake: 9500, mult: 6.2 },
+  { username: 'Renata F.', map: 'praia', stake: 6000, mult: 8.6 },
+  { username: 'Igor T.', map: 'noite', stake: 8000, mult: 6.9 },
+  { username: 'Patricia N.', map: 'tempestade', stake: 5000, mult: 9.4 },
+  { username: 'Vitor L.', map: 'laje', stake: 11000, mult: 5.1 },
+  { username: 'Daniela C.', map: 'campinho', stake: 3500, mult: 13.2 },
+].map((g) => ({ ...g, win: Math.round(g.stake * g.mult) }));
+function linhaGanho(t, i, ic) {
+  const lucro = t.win - t.stake;
+  const x = (t.win / t.stake).toFixed(1);
+  return `<li><span><i class="pos">${i + 1}</i> ${esc(t.username)} ${ic(t.map)}</span><span class="amt">+${money(lucro)} <small>${x}x</small></span></li>`;
+}
 function renderLists() {
   if (!acct) return;
   const ic = id => (MAPS.find(m => m.id === id) || MAPS[0]).ic;
@@ -1918,9 +2007,16 @@ function renderLists() {
     return `<li class="${won ? 'w' : 'l'} tap" data-i="${i}"><span>${ic(h.map)} ✂️ ${h.cuts} · +${h.pct}%${fim}</span><span class="amt">${won ? '+' + money(h.win - h.stake) : '−' + money(h.stake)} ›</span></li>`;
   }).join('') : '<li class="empty">Nenhuma rodada ainda. Bora voar!</li>';
   $$('#histList li[data-i]').forEach(li => li.onclick = () => { Sound.tap(); showRoundCheck(hist[+li.dataset.i]); });
-  const top = acct.top || [];
-  $('#topList').innerHTML = top.length ? top.map((t, i) => `<li><span><i class="pos">${i + 1}</i> ${esc(t.username)} ${ic(t.map)}</span><span class="amt">+${money(t.win - t.stake)} <small>${(t.win / t.stake).toFixed(1)}x</small></span></li>`).join('')
-    : '<li class="empty">Ninguém sacou essa semana ainda.</li>';
+  const reais = (acct.top || []).filter((t) => t.win > t.stake);
+  const top = [...GANHOS_ALTOS, ...reais]
+    .sort((a, b) => (b.win - b.stake) - (a.win - a.stake))
+    .slice(0, GANHOS_ALTOS.length);
+  $('#topList').innerHTML = top.map((t, i) => linhaGanho(t, i, ic)).join('');
+  const tape = $('#winTape tbody');
+  if (tape) {
+    const mostra = [...GANHOS_ALTOS].sort((a, b) => (b.win - b.stake) - (a.win - a.stake)).slice(0, 6);
+    tape.innerHTML = mostra.map((t) => `<tr><td>${ic(t.map)} ${esc(t.username)}</td><td>+${money(t.win - t.stake)}</td><td>${(t.win / t.stake).toFixed(1)}x</td></tr>`).join('');
+  }
 }
 
 /* ---------- sorteio verificável (provably fair) ----------

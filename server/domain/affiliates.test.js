@@ -39,24 +39,41 @@ test('modelo deposito: % de cada deposito em 3 niveis', async () => {
   assert.equal(i.ganhoCents, 2000);
 });
 
-test('modelo CPA: so depois que o indicado deposita o minimo E aposta o minimo; paga uma vez', async () => {
-  await config({ modelo: 'cpa', cpaCents: [1500, 500, 0], cpaDepositoMinCents: 3000 });
+test('modelo CPA: 10% do primeiro deposito que atinge o minimo, uma vez, sem exigir aposta', async () => {
+  await config({ modelo: 'cpa', niveisPct: [10, 0, 0], cpaDepositoMinCents: 2500 });
   const { b, c, d } = await cadeia();
-  await createDeposit(d.id, 2500); // abaixo do minimo
-  const jogar = async (u, n) => { for (let i = 0; i < n; i++) { const { round } = await start(u.id, { betCents: 1000 }); await lose(u.id, round.id, { reason: 'cut' }); } };
-  await jogar(d, 2);
-  assert.equal(await balanceOf(db, c.id), 0); // nenhum deposito >= minimo
+  await createDeposit(d.id, 2000); // abaixo de R$ 25: nao paga e nao queima a chance
+  assert.equal(await balanceOf(db, c.id), 0);
 
-  const e = await user(c.id);
-  await createDeposit(e.id, 5000);
-  assert.equal(await balanceOf(db, c.id), 0); // depositou mas ainda nao apostou (conta de fachada nao gera CPA)
-  await jogar(e, 2);
-  assert.equal(await balanceOf(db, c.id), 0); // apostou 2000 < 3000
-  await jogar(e, 2);
-  assert.equal(await balanceOf(db, c.id), 1500);
-  assert.equal(await balanceOf(db, b.id), 500);
-  await jogar(e, 1);
-  assert.equal(await balanceOf(db, c.id), 1500); // uma vez so
+  await createDeposit(d.id, 10000); // primeiro que qualifica: 10% = R$ 10
+  assert.equal(await balanceOf(db, c.id), 1000);
+  assert.equal(await balanceOf(db, b.id), 0); // so quem passou o link (nivel direto)
+  await createDeposit(d.id, 20000); // deposito seguinte nao gera comissao
+  assert.equal(await balanceOf(db, c.id), 1000);
+
+  const i = await info(c);
+  assert.equal(i.modelo, 'cpa');
+  assert.equal(i.niveis[0].pct, 10);
+  assert.equal(i.cpaDepositoMinCents, 2500);
+  assert.equal(i.qualificados, 1);
+  assert.equal(i.pctAtual, 10);
+});
+
+test('CPA sobe de faixa quando ja existem amigos com deposito no minimo', async () => {
+  await config({ modelo: 'cpa', niveisPct: [10, 15, 20], cpaMetas: [0, 2, 4], cpaDepositoMinCents: 2500 });
+  const a = await user();
+  const indicar = async (cents) => { const d = await user(a.id); await createDeposit(d.id, cents); };
+  await indicar(2000); // abaixo do minimo: nao paga e nao conta
+  assert.equal(await balanceOf(db, a.id), 0);
+  await indicar(10000); // 0 qualificados antes: 10%
+  await indicar(10000); // 1 qualificado antes: ainda 10%
+  assert.equal(await balanceOf(db, a.id), 2000);
+  await indicar(10000); // 2 qualificados antes: 15%
+  assert.equal(await balanceOf(db, a.id), 3500);
+  const i = await info(a);
+  assert.equal(i.qualificados, 3);
+  assert.equal(i.pctAtual, 15);
+  assert.equal(i.faixaAtual, 1);
 });
 
 test('modelo deposito: quando o indicado saca, a comissao do valor sacado volta (sem farm deposita-saca)', async () => {
@@ -112,6 +129,7 @@ test('saque de comissao: debita o saldo de comissao, recusa estorna, sem saldo n
 
 test('configuracao invalida e recusada', async () => {
   await assert.rejects(() => config({ modelo: 'pirâmide' }), (e) => e.code === 'INVALID_SETTING');
-  await assert.rejects(() => config({ niveisPct: [40, 20, 10] }), (e) => e.code === 'INVALID_SETTING');
+  await assert.rejects(() => config({ modelo: 'deposito', niveisPct: [40, 20, 10] }), (e) => e.code === 'INVALID_SETTING');
+  await assert.rejects(() => config({ cpaMetas: [5, 2, 10] }), (e) => e.code === 'INVALID_SETTING');
   await assert.rejects(() => config({ saqueMinCents: 5000, saqueMaxCents: 1000 }), (e) => e.code === 'INVALID_SETTING');
 });

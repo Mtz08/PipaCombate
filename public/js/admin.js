@@ -70,12 +70,12 @@ async function boot() {
       <form id="affForm" class="aff-form">
         <label class="check"><input type="checkbox" name="ativo"> Programa ativo</label>
         <label>Modelo <select name="modelo">
+          <option value="cpa">CPA: % do 1º depósito acima do mínimo</option>
           <option value="deposito">% de cada depósito do indicado</option>
-          <option value="cpa">CPA: valor fixo no 1º depósito</option>
           <option value="revshare">RevShare: % do resultado da casa</option></select></label>
-        <div class="row" data-m="pct"><b>% por nível</b><input name="p1" type="number" min="0" max="50"><input name="p2" type="number" min="0" max="50"><input name="p3" type="number" min="0" max="50"></div>
-        <div class="row" data-m="cpa"><b>CPA R$ por nível</b><input name="c1" type="number" min="0" step="0.01"><input name="c2" type="number" min="0" step="0.01"><input name="c3" type="number" min="0" step="0.01"></div>
-        <div class="row" data-m="cpa"><b>Depósito mínimo p/ CPA (R$)</b><input name="cpaMin" type="number" min="0" step="0.01"></div>
+        <div class="row"><b id="affPctLbl">% por nível</b><input name="p1" type="number" min="0" max="50"><input name="p2" type="number" min="0" max="50"><input name="p3" type="number" min="0" max="50"></div>
+        <div class="row" data-m="cpa"><b>Amigos que já depositaram o mínimo</b><input name="m1" type="number" min="0"><input name="m2" type="number" min="0"><input name="m3" type="number" min="0"></div>
+        <div class="row" data-m="cpa"><b>Depósito mínimo para ganhar (R$)</b><input name="cpaMin" type="number" min="0" step="0.01"></div>
         <div class="row"><b>Saque de comissão R$ mín/máx</b><input name="sMin" type="number" min="1" step="0.01"><input name="sMax" type="number" min="1" step="0.01"></div>
         <button class="primary" type="submit">Salvar</button><p id="affMsg" class="msg"></p>
       </form></section>
@@ -204,16 +204,21 @@ async function affiliates() {
   const f = $('#affForm');
   f.ativo.checked = v.ativo; f.modelo.value = v.modelo;
   [f.p1.value, f.p2.value, f.p3.value] = v.niveisPct;
-  [f.c1.value, f.c2.value, f.c3.value] = v.cpaCents.map(reais);
+  [f.m1.value, f.m2.value, f.m3.value] = v.cpaMetas || [0, 5, 10];
   f.cpaMin.value = reais(v.cpaDepositoMinCents); f.sMin.value = reais(v.saqueMinCents); f.sMax.value = reais(v.saqueMaxCents);
-  const show = () => f.querySelectorAll('[data-m]').forEach((el) => { el.hidden = el.dataset.m === 'cpa' ? f.modelo.value !== 'cpa' : f.modelo.value === 'cpa'; });
+  const show = () => {
+    const cpa = f.modelo.value === 'cpa';
+    f.querySelectorAll('[data-m="cpa"]').forEach((el) => { el.hidden = !cpa; });
+    $('#affPctLbl').textContent = cpa ? '% do 1º depósito em cada faixa' : '% por nível';
+  };
   f.modelo.onchange = show; show();
   f.onsubmit = async (e) => {
     e.preventDefault();
     const value = {
       ativo: f.ativo.checked, modelo: f.modelo.value,
       niveisPct: [f.p1.value, f.p2.value, f.p3.value].map(Number),
-      cpaCents: [f.c1.value, f.c2.value, f.c3.value].map(cents),
+      cpaMetas: [f.m1.value, f.m2.value, f.m3.value].map(Number),
+      cpaCents: v.cpaCents,
       cpaDepositoMinCents: cents(f.cpaMin.value), saqueMinCents: cents(f.sMin.value), saqueMaxCents: cents(f.sMax.value),
     };
     try { await api('settings/afiliados', { value }); $('#affMsg').textContent = 'Salvo. Vale para os próximos depósitos e rodadas.'; audit(); }

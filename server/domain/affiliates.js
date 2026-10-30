@@ -1,8 +1,11 @@
 // Indique e ganhe: comissao em ate 3 niveis, no modelo escolhido no admin.
 //
-//  - cpa:      valor fixo por nivel, uma vez, quando o indicado tem um deposito
-//              >= minimo do CPA E ja APOSTOU esse minimo (conta de fachada que
-//              so deposita e saca nao gera CPA).
+//  - cpa:      % do primeiro deposito do indicado que atinge o minimo.
+//              So quem passou o link recebe. A % sobe com a quantidade de
+//              amigos que ja depositaram o minimo: 10% no inicio, 15% com 5,
+//              20% com 10. O deposito que completa a meta ainda sai na faixa
+//              anterior; a faixa nova vale para o proximo. Deposito abaixo do
+//              minimo nao paga e nao conta.
 //  - deposito: % de cada deposito do indicado, devolvido (proporcional) quando
 //              ele SACA: so fica comissao sobre o que ele realmente deixou na casa.
 //  - revshare: % do resultado da casa nas rodadas do indicado (aposta - premio).
@@ -42,33 +45,50 @@ async function add(t, { affiliateId, referralId = null, level = null, type, delt
 }
 
 /** Hook: deposito confirmado do indicado (dentro da transacao do deposito). */
-export async function onDeposit(t, user, { amountCents, chargeId, first }) {
+export async function onDeposit(t, user, { amountCents, chargeId }) {
   if (!user.referredBy) return;
   const cfg = await getSetting('afiliados', t);
   if (!cfg.ativo || cfg.modelo === 'revshare') return;
+  if (cfg.modelo === 'cpa') return payCpa(t, user, cfg, { amountCents, chargeId });
   const ups = await upline(t, user.referredBy);
   for (let i = 0; i < ups.length; i++) {
-    if (cfg.modelo === 'deposito') {
-      const v = Math.floor((amountCents * cfg.niveisPct[i]) / 100);
-      await add(t, { affiliateId: ups[i], referralId: user.id, level: i + 1, type: 'deposit', deltaCents: v, meta: { chargeId, pct: cfg.niveisPct[i] } });
-    }
+    const v = Math.floor((amountCents * cfg.niveisPct[i]) / 100);
+    await add(t, { affiliateId: ups[i], referralId: user.id, level: i + 1, type: 'deposit', deltaCents: v, meta: { chargeId, pct: cfg.niveisPct[i] } });
   }
 }
 
-/** CPA: paga uma vez, quando o indicado depositou o minimo e ja apostou esse minimo. */
-async function maybePayCpa(t, user, cfg) {
-  if ((await t.query("SELECT 1 FROM affiliate_ledger WHERE type = 'cpa' AND referral_id = $1 LIMIT 1", [user.id])).length) return;
-  const min = cfg.cpaDepositoMinCents;
-  const [q] = await t.query(
-    `SELECT EXISTS (SELECT 1 FROM charges WHERE user_id = $1 AND status = 'paid' AND amount_cents >= $2) AS dep,
-            (SELECT COALESCE(SUM(bet_cents), 0) FROM rounds WHERE user_id = $1 AND state <> 'open') AS apostado`,
-    [user.id, min],
+/** Amigos diretos que ja tiveram um deposito pago >= minimo. */
+async function qualificadosDe(q, affiliateId, minCents) {
+  const [r] = await q.query(
+    `SELECT COUNT(DISTINCT u.id)::int AS n
+       FROM users u
+       JOIN charges c ON c.user_id = u.id AND c.status = 'paid' AND c.amount_cents >= $2
+      WHERE u.referred_by = $1 AND NOT u.demo`,
+    [affiliateId, minCents],
   );
-  if (!q.dep || Number(q.apostado) < min) return;
-  const ups = await upline(t, user.referredBy);
-  for (let i = 0; i < ups.length; i++) {
-    await add(t, { affiliateId: ups[i], referralId: user.id, level: i + 1, type: 'cpa', deltaCents: cfg.cpaCents[i], meta: { apostado: Number(q.apostado) } });
-  }
+  return r.n;
+}
+
+/** Faixa do CPA conforme quantos amigos ja qualificaram. */
+function faixaDe(cfg, qualificados) {
+  const metas = cfg.cpaMetas || [0, 5, 10];
+  let idx = 0;
+  for (let i = 0; i < metas.length; i++) if (qualificados >= metas[i]) idx = i;
+  return { idx, pct: cfg.niveisPct[idx] || 0 };
+}
+
+/** CPA: uma vez, % do primeiro deposito que atinge o minimo, so para quem passou o link. */
+async function payCpa(t, user, cfg, { amountCents, chargeId }) {
+  if (amountCents < cfg.cpaDepositoMinCents) return;
+  if ((await t.query("SELECT 1 FROM affiliate_ledger WHERE type = 'cpa' AND referral_id = $1 LIMIT 1", [user.id])).length) return;
+  const affiliateId = user.referredBy;
+  const ja = await qualificadosDe(t, affiliateId, cfg.cpaDepositoMinCents);
+  const { idx, pct } = faixaDe(cfg, ja);
+  const v = Math.floor((amountCents * pct) / 100);
+  await add(t, {
+    affiliateId, referralId: user.id, level: idx + 1, type: 'cpa', deltaCents: v,
+    meta: { chargeId, pct, amountCents, qualificados: ja },
+  });
 }
 
 /** Hook: saque do indicado (saldo de jogo). Modelo deposito: devolve a comissao do valor sacado. */
@@ -107,7 +127,6 @@ export async function reverseCharge(t, chargeId) {
 export async function onRoundClosed(t, user, { roundId, betCents, prizeCents }) {
   if (!user.referredBy || user.testAlwaysWin) return; // rodada de teste nao gera comissao
   const cfg = await getSetting('afiliados', t);
-  if (cfg.ativo && cfg.modelo === 'cpa') return maybePayCpa(t, user, cfg);
   if (!cfg.ativo || cfg.modelo !== 'revshare') return;
   const ggr = betCents - prizeCents;
   const ups = await upline(t, user.referredBy);
@@ -159,13 +178,17 @@ export async function info(user) {
   const recent = await db.query(
     `SELECT type, level, delta_cents, created_at FROM affiliate_ledger WHERE affiliate_id = $1 ORDER BY id DESC LIMIT 20`, [user.id],
   );
+  const qualificados = await qualificadosDe(db, user.id, cfg.cpaDepositoMinCents);
+  const faixa = faixaDe(cfg, qualificados);
   return {
     ativo: cfg.ativo,
     codigo: user.referralCode,
     modelo: cfg.modelo,
-    niveis: cfg.modelo === 'cpa'
-      ? cfg.cpaCents.map((c) => ({ tipo: 'valor', cents: c }))
-      : cfg.niveisPct.map((p) => ({ tipo: 'pct', pct: p })),
+    niveis: cfg.niveisPct.map((p, i) => ({ tipo: 'pct', pct: p, meta: cfg.cpaMetas[i] })),
+    cpaMetas: cfg.cpaMetas,
+    qualificados,
+    pctAtual: faixa.pct,
+    faixaAtual: faixa.idx,
     cpaDepositoMinCents: cfg.cpaDepositoMinCents,
     indicados: counts,
     ganhoCents: Number(tot.ganho),
